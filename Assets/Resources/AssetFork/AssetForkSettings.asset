@@ -12,4 +12,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 95cd2932c730ff24fafabd68c2a7feb1, type: 3}
   m_Name: AssetForkSettings
   m_EditorClassIdentifier: Nyorowrl.Assetfork::Nyorowrl.Assetfork.AssetForkSettings
-  syncConfigs: []
+  syncConfigs:
+  - enabled: 1
+    configName: Config 1
+    sourcePath: Assets/Test/Source
+    destinationPath: Assets/Test/Destination
+    filters:
+    - invert: 0
+      useMultipleTypes: 0
+      singleTypeName: UnityEngine.Texture2D, UnityEngine.CoreModule, Version=0.0.0.0,
+        Culture=neutral, PublicKeyToken=null
+      multipleTypeNames: []

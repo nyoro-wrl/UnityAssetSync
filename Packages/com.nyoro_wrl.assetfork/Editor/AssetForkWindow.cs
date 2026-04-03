@@ -1,5 +1,6 @@
 using System.IO;
 using UnityEditor;
+using UnityEditor.IMGUI.Controls;
 using UnityEngine;
 using Nyorowrl.Assetfork;
 
@@ -71,10 +72,21 @@ namespace Nyorowrl.Assetfork.Editor
                 var config = _settings.syncConfigs[i];
                 string label = string.IsNullOrEmpty(config.configName) ? $"Config {i + 1}" : config.configName;
 
+                EditorGUILayout.BeginHorizontal();
+
+                EditorGUI.BeginChangeCheck();
+                config.enabled = EditorGUILayout.Toggle(config.enabled, GUILayout.Width(16));
+                if (EditorGUI.EndChangeCheck())
+                    ApplyConfigChange(config);
+
                 bool selected = _selectedConfigIndex == i;
+                GUI.enabled = config.enabled;
                 bool newSelected = GUILayout.Toggle(selected, label, "Button");
+                GUI.enabled = true;
                 if (newSelected && !selected)
                     _selectedConfigIndex = i;
+
+                EditorGUILayout.EndHorizontal();
             }
 
             EditorGUILayout.EndScrollView();
@@ -94,24 +106,30 @@ namespace Nyorowrl.Assetfork.Editor
 
             var config = _settings.syncConfigs[_selectedConfigIndex];
 
+            // configName: ラベル変更のみ、同期は不要
             EditorGUI.BeginChangeCheck();
-
             config.configName = EditorGUILayout.TextField("Name", config.configName);
+            if (EditorGUI.EndChangeCheck())
+                MarkSettingsDirty();
 
+            // Source / Destination: 変更時に同期
             var srcObj = string.IsNullOrEmpty(config.sourcePath)
                 ? null : AssetDatabase.LoadAssetAtPath<DefaultAsset>(config.sourcePath);
             var newSrcObj = (DefaultAsset)EditorGUILayout.ObjectField("Source", srcObj, typeof(DefaultAsset), false);
             if (newSrcObj != srcObj)
+            {
                 config.sourcePath = AssetDatabase.GetAssetPath(newSrcObj);
+                ApplyConfigChange(config);
+            }
 
             var dstObj = string.IsNullOrEmpty(config.destinationPath)
                 ? null : AssetDatabase.LoadAssetAtPath<DefaultAsset>(config.destinationPath);
             var newDstObj = (DefaultAsset)EditorGUILayout.ObjectField("Destination", dstObj, typeof(DefaultAsset), false);
             if (newDstObj != dstObj)
+            {
                 config.destinationPath = AssetDatabase.GetAssetPath(newDstObj);
-
-            if (EditorGUI.EndChangeCheck())
-                MarkSettingsDirty();
+                ApplyConfigChange(config);
+            }
 
             EditorGUILayout.Space();
             DrawFilterList(config);
@@ -139,22 +157,22 @@ namespace Nyorowrl.Assetfork.Editor
 
             int deleteIndex = -1;
             for (int i = 0; i < config.filters.Count; i++)
-                DrawFilterCondition(config.filters[i], i, ref deleteIndex);
+                DrawFilterCondition(config.filters[i], i, ref deleteIndex, config);
 
             if (deleteIndex >= 0)
             {
                 config.filters.RemoveAt(deleteIndex);
-                MarkSettingsDirty();
+                ApplyConfigChange(config);
             }
 
             if (GUILayout.Button("Add Filter"))
             {
                 config.filters.Add(new FilterCondition());
-                MarkSettingsDirty();
+                ApplyConfigChange(config);
             }
         }
 
-        private void DrawFilterCondition(FilterCondition filter, int index, ref int deleteIndex)
+        private void DrawFilterCondition(FilterCondition filter, int index, ref int deleteIndex, SyncConfig config)
         {
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             EditorGUILayout.BeginHorizontal();
@@ -171,35 +189,58 @@ namespace Nyorowrl.Assetfork.Editor
             filter.invert = EditorGUILayout.Toggle("Invert", filter.invert);
             filter.useMultipleTypes = EditorGUILayout.Toggle("Multiple Types", filter.useMultipleTypes);
 
+            if (EditorGUI.EndChangeCheck())
+                ApplyConfigChange(config);
+
             if (filter.useMultipleTypes)
             {
                 EditorGUILayout.LabelField("Types:", EditorStyles.miniLabel);
                 EditorGUI.indentLevel++;
 
+                int removeTypeIndex = -1;
                 for (int i = 0; i < filter.multipleTypeNames.Count; i++)
                 {
                     EditorGUILayout.BeginHorizontal();
-                    filter.multipleTypeNames[i] = EditorGUILayout.TextField(filter.multipleTypeNames[i]);
-                    if (GUILayout.Button("x", GUILayout.Width(20)))
+                    string displayName = NicifyTypeName(filter.multipleTypeNames[i]);
+                    EditorGUILayout.LabelField(displayName, GUILayout.ExpandWidth(true));
+                    int captured = i;
+                    if (GUILayout.Button("...", GUILayout.Width(25)))
                     {
-                        filter.multipleTypeNames.RemoveAt(i);
-                        break;
+                        var dropdown = new TypeSelectorDropdown(new AdvancedDropdownState(),
+                            n => { filter.multipleTypeNames[captured] = n; ApplyConfigChange(config); });
+                        dropdown.Show(GUILayoutUtility.GetLastRect());
                     }
+                    if (GUILayout.Button("x", GUILayout.Width(20)))
+                        removeTypeIndex = i;
                     EditorGUILayout.EndHorizontal();
+                }
+                if (removeTypeIndex >= 0)
+                {
+                    filter.multipleTypeNames.RemoveAt(removeTypeIndex);
+                    ApplyConfigChange(config);
                 }
 
                 if (GUILayout.Button("Add Type"))
+                {
                     filter.multipleTypeNames.Add("");
+                    ApplyConfigChange(config);
+                }
 
                 EditorGUI.indentLevel--;
             }
             else
             {
-                filter.singleTypeName = EditorGUILayout.TextField("Type", filter.singleTypeName);
+                EditorGUILayout.BeginHorizontal();
+                string display = NicifyTypeName(filter.singleTypeName);
+                EditorGUILayout.LabelField("Type", display);
+                if (GUILayout.Button("Select", GUILayout.Width(55)))
+                {
+                    var dropdown = new TypeSelectorDropdown(new AdvancedDropdownState(),
+                        n => { filter.singleTypeName = n; ApplyConfigChange(config); });
+                    dropdown.Show(GUILayoutUtility.GetLastRect());
+                }
+                EditorGUILayout.EndHorizontal();
             }
-
-            if (EditorGUI.EndChangeCheck())
-                MarkSettingsDirty();
 
             EditorGUILayout.EndVertical();
         }
@@ -207,6 +248,22 @@ namespace Nyorowrl.Assetfork.Editor
         private void MarkSettingsDirty()
         {
             EditorUtility.SetDirty(_settings);
+        }
+
+        private void ApplyConfigChange(SyncConfig config)
+        {
+            MarkSettingsDirty();
+            AssetSyncer.SyncConfig(config);
+        }
+
+        private static string NicifyTypeName(string assemblyQualifiedName)
+        {
+            if (string.IsNullOrEmpty(assemblyQualifiedName))
+                return "(None)";
+            int comma = assemblyQualifiedName.IndexOf(',');
+            string fullName = comma >= 0 ? assemblyQualifiedName.Substring(0, comma).Trim() : assemblyQualifiedName;
+            int dot = fullName.LastIndexOf('.');
+            return ObjectNames.NicifyVariableName(dot >= 0 ? fullName.Substring(dot + 1) : fullName);
         }
 
         private static AssetForkSettings LoadOrCreateSettings()
