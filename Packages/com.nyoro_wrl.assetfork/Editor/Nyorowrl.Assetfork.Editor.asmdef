@@ -1,0 +1,10 @@
+{
+    "name": "Nyorowrl.Assetfork.Editor",
+    "references": [
+      "Nyorowrl.Assetfork"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": []
+}

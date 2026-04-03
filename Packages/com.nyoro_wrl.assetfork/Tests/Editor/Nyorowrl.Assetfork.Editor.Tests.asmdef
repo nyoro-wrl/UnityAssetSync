@@ -1,0 +1,14 @@
+{
+    "name": "Nyorowrl.Assetfork.Editor.Tests",
+    "references": [
+        "Nyorowrl.Assetfork.Editor",
+        "Nyorowrl.Assetfork"
+    ],
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": []
+}

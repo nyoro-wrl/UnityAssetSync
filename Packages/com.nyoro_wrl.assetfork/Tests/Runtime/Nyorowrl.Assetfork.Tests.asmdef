@@ -1,0 +1,11 @@
+{
+    "name": "Nyorowrl.Assetfork.Tests",
+    "references": [
+        "Nyorowrl.Assetfork"
+    ],
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": []
+}
