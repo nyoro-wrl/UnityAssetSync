@@ -1,4 +1,3 @@
-using System.IO;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEngine;
@@ -8,6 +7,8 @@ namespace Nyorowrl.Assetfork.Editor
 {
     public class AssetForkWindow : EditorWindow
     {
+        private const string SettingsPathPrefKey = "AssetFork.SettingsPath";
+
         private AssetForkSettings _settings;
         private Vector2 _scrollPosition;
         private int _selectedConfigIndex = -1;
@@ -20,23 +21,60 @@ namespace Nyorowrl.Assetfork.Editor
 
         private void OnEnable()
         {
-            _settings = LoadOrCreateSettings();
+            string savedPath = EditorPrefs.GetString(SettingsPathPrefKey, "");
+            if (!string.IsNullOrEmpty(savedPath))
+                _settings = AssetDatabase.LoadAssetAtPath<AssetForkSettings>(savedPath);
         }
 
         private void OnGUI()
         {
-            if (_settings == null)
-            {
-                _settings = LoadOrCreateSettings();
-                return;
-            }
+            DrawSettingsField();
 
+            if (_settings == null)
+                return;
+
+            EditorGUILayout.Space();
             DrawToolbar();
             EditorGUILayout.Space();
 
             EditorGUILayout.BeginHorizontal();
             DrawConfigList();
             DrawConfigDetail();
+            EditorGUILayout.EndHorizontal();
+        }
+
+        private void DrawSettingsField()
+        {
+            EditorGUILayout.BeginHorizontal();
+
+            EditorGUI.BeginChangeCheck();
+            _settings = (AssetForkSettings)EditorGUILayout.ObjectField("Settings", _settings, typeof(AssetForkSettings), false);
+            if (EditorGUI.EndChangeCheck())
+            {
+                _selectedConfigIndex = -1;
+                string path = _settings != null ? AssetDatabase.GetAssetPath(_settings) : "";
+                EditorPrefs.SetString(SettingsPathPrefKey, path);
+            }
+
+            if (GUILayout.Button("New", GUILayout.Width(50)))
+            {
+                string path = EditorUtility.SaveFilePanelInProject(
+                    "Create AssetFork Settings",
+                    "AssetForkSettings",
+                    "asset",
+                    "Create a new AssetFork settings file");
+
+                if (!string.IsNullOrEmpty(path))
+                {
+                    var newSettings = CreateInstance<AssetForkSettings>();
+                    AssetDatabase.CreateAsset(newSettings, path);
+                    AssetDatabase.SaveAssets();
+                    _settings = newSettings;
+                    _selectedConfigIndex = -1;
+                    EditorPrefs.SetString(SettingsPathPrefKey, path);
+                }
+            }
+
             EditorGUILayout.EndHorizontal();
         }
 
@@ -264,22 +302,6 @@ namespace Nyorowrl.Assetfork.Editor
             string fullName = comma >= 0 ? assemblyQualifiedName.Substring(0, comma).Trim() : assemblyQualifiedName;
             int dot = fullName.LastIndexOf('.');
             return ObjectNames.NicifyVariableName(dot >= 0 ? fullName.Substring(dot + 1) : fullName);
-        }
-
-        private static AssetForkSettings LoadOrCreateSettings()
-        {
-            var settings = Resources.Load<AssetForkSettings>(AssetForkSettings.ResourcesPath);
-            if (settings != null)
-                return settings;
-
-            const string dirPath = "Assets/Resources/AssetFork";
-            if (!Directory.Exists(dirPath))
-                Directory.CreateDirectory(dirPath);
-
-            settings = CreateInstance<AssetForkSettings>();
-            AssetDatabase.CreateAsset(settings, dirPath + "/AssetForkSettings.asset");
-            AssetDatabase.SaveAssets();
-            return settings;
         }
     }
 }

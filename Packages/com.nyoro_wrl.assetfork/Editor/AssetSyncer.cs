@@ -250,23 +250,28 @@ namespace Nyorowrl.Assetfork.Editor
             string[] movedAssets,
             string[] movedFromAssetPaths)
         {
-            AssetForkSettings settings = Resources.Load<AssetForkSettings>(AssetForkSettings.ResourcesPath);
-            if (settings == null)
-                return;
-
-            foreach (var config in settings.syncConfigs)
+            string[] guids = AssetDatabase.FindAssets("t:AssetForkSettings");
+            foreach (string guid in guids)
             {
-                string srcPath = config.sourcePath;
-                if (string.IsNullOrEmpty(srcPath))
+                string assetPath = AssetDatabase.GUIDToAssetPath(guid);
+                var settings = AssetDatabase.LoadAssetAtPath<AssetForkSettings>(assetPath);
+                if (settings == null)
                     continue;
 
-                bool needsSync = importedAssets.Any(p => p.StartsWith(srcPath))
-                    || deletedAssets.Any(p => p.StartsWith(srcPath))
-                    || movedAssets.Any(p => p.StartsWith(srcPath))
-                    || movedFromAssetPaths.Any(p => p.StartsWith(srcPath));
+                foreach (var config in settings.syncConfigs)
+                {
+                    string srcPath = config.sourcePath;
+                    if (string.IsNullOrEmpty(srcPath))
+                        continue;
 
-                if (needsSync)
-                    AssetSyncer.SyncConfig(config);
+                    bool needsSync = importedAssets.Any(p => p.StartsWith(srcPath))
+                        || deletedAssets.Any(p => p.StartsWith(srcPath))
+                        || movedAssets.Any(p => p.StartsWith(srcPath))
+                        || movedFromAssetPaths.Any(p => p.StartsWith(srcPath));
+
+                    if (needsSync)
+                        AssetSyncer.SyncConfig(config);
+                }
             }
         }
     }

@@ -73,6 +73,9 @@ namespace Nyorowrl.Assetfork.Editor.Tests
         {
             string full = Path.Combine(_srcFullPath, relPath.Replace('/', Path.DirectorySeparatorChar));
             if (File.Exists(full)) File.Delete(full);
+            // SyncConfig の Refresh でインポート済みの .meta も削除しないと孤立 .meta 警告が出る
+            string meta = full + ".meta";
+            if (File.Exists(meta)) File.Delete(meta);
         }
 
         private bool DstExists(string relPath)
