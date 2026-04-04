@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEditorInternal;
@@ -17,11 +17,9 @@ namespace Nyorowrl.Assetfork.Editor
         private bool _isResizing;
         private string _statusMessage = "";
 
-        // Config リスト (TreeView)
         [SerializeField] private TreeViewState<int> _treeViewState;
         private ConfigTreeView _configTreeView;
 
-        // Multiple Types の ReorderableList キャッシュ
         private readonly Dictionary<FilterCondition, ReorderableList> _typesLists =
             new Dictionary<FilterCondition, ReorderableList>();
 
@@ -75,7 +73,7 @@ namespace Nyorowrl.Assetfork.Editor
             if (_settings == null)
             {
                 EditorGUILayout.Space();
-                EditorGUILayout.HelpBox("Settings を選択するか、New ボタンで新しい設定ファイルを作成してください。", MessageType.Info);
+                EditorGUILayout.HelpBox("Settings を選択するか New ボタンで新しい設定ファイルを作成してください。", MessageType.Info);
                 return;
             }
 
@@ -134,7 +132,7 @@ namespace Nyorowrl.Assetfork.Editor
             EditorGUILayout.BeginHorizontal(EditorStyles.toolbar);
 
             var addIcon = EditorGUIUtility.IconContent("d_Toolbar Plus");
-            addIcon.tooltip = "Config を追加";
+            addIcon.tooltip = "Add Config";
             if (GUILayout.Button(addIcon, EditorStyles.toolbarButton, GUILayout.Width(28)))
             {
                 Undo.RecordObject(_settings, "Add Config");
@@ -151,11 +149,11 @@ namespace Nyorowrl.Assetfork.Editor
             GUILayout.FlexibleSpace();
 
             var syncIcon = EditorGUIUtility.IconContent("d_Refresh");
-            syncIcon.tooltip = "すべて同期";
+            syncIcon.tooltip = "Sync All";
             if (GUILayout.Button(syncIcon, EditorStyles.toolbarButton, GUILayout.Width(28)))
             {
                 int count = AssetSyncer.SyncAll(_settings);
-                _statusMessage = $"Sync All: {count} ファイルをコピー ({System.DateTime.Now:HH:mm:ss})";
+                _statusMessage = $"Sync All: copied {count} files ({System.DateTime.Now:HH:mm:ss})";
             }
 
             EditorGUILayout.EndHorizontal();
@@ -260,7 +258,7 @@ namespace Nyorowrl.Assetfork.Editor
             EditorGUILayout.LabelField("Filters", EditorStyles.boldLabel);
             GUILayout.FlexibleSpace();
             var addIcon = EditorGUIUtility.IconContent("d_Toolbar Plus");
-            addIcon.tooltip = "フィルターを追加";
+            addIcon.tooltip = "Add Filter";
             if (GUILayout.Button(addIcon, EditorStyles.iconButton))
             {
                 Undo.RecordObject(_settings, "Add Filter");
@@ -286,7 +284,6 @@ namespace Nyorowrl.Assetfork.Editor
         {
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
 
-            // Exclude + 右端に削除ボタン
             EditorGUILayout.BeginHorizontal();
             EditorGUI.BeginChangeCheck();
             bool newInvert = EditorGUILayout.Toggle("Exclude", filter.invert);
@@ -298,12 +295,11 @@ namespace Nyorowrl.Assetfork.Editor
             }
             GUILayout.FlexibleSpace();
             var deleteFilterIcon = EditorGUIUtility.IconContent("CrossIcon");
-            deleteFilterIcon.tooltip = "フィルターを削除";
+            deleteFilterIcon.tooltip = "Delete Filter";
             if (GUILayout.Button(deleteFilterIcon, EditorStyles.iconButton))
                 deleteIndex = index;
             EditorGUILayout.EndHorizontal();
 
-            // Multiple Types トグル（切替時に型を引き継ぐ）
             EditorGUI.BeginChangeCheck();
             bool newUseMultipleTypes = EditorGUILayout.Toggle("Multiple Types", filter.useMultipleTypes);
             if (EditorGUI.EndChangeCheck())
@@ -325,7 +321,6 @@ namespace Nyorowrl.Assetfork.Editor
                 ApplyConfigChange(config);
             }
 
-            // 型セレクタ
             EditorGUILayout.LabelField("Type", EditorStyles.miniLabel);
             if (filter.useMultipleTypes)
             {
@@ -334,7 +329,7 @@ namespace Nyorowrl.Assetfork.Editor
             else
             {
                 string typeDisplay = string.IsNullOrEmpty(filter.singleTypeName)
-                    ? "Type を選択..."
+                    ? "Select Type..."
                     : NicifyTypeName(filter.singleTypeName);
                 if (GUILayout.Button(typeDisplay, EditorStyles.popup))
                 {
@@ -367,7 +362,7 @@ namespace Nyorowrl.Assetfork.Editor
             {
                 if (i >= filter.multipleTypeNames.Count) return;
                 string display = string.IsNullOrEmpty(filter.multipleTypeNames[i])
-                    ? "Type を選択..." : NicifyTypeName(filter.multipleTypeNames[i]);
+                    ? "Select Type..." : NicifyTypeName(filter.multipleTypeNames[i]);
                 var btnRect = new Rect(rect.x, rect.y + 1, rect.width, rect.height - 2);
                 int captured = i;
                 if (GUI.Button(btnRect, display, EditorStyles.popup))
@@ -413,11 +408,6 @@ namespace Nyorowrl.Assetfork.Editor
         private void DeleteConfig(int idx)
         {
             if (_settings == null || idx < 0 || idx >= _settings.syncConfigs.Count) return;
-            var config = _settings.syncConfigs[idx];
-            string name = string.IsNullOrEmpty(config.configName) ? $"Config {idx + 1}" : config.configName;
-            if (!EditorUtility.DisplayDialog("Config を削除",
-                $"「{name}」を削除しますか？\nこの操作は元に戻せます（Ctrl+Z）。", "削除", "キャンセル"))
-                return;
 
             Undo.RecordObject(_settings, "Delete Config");
             _settings.syncConfigs.RemoveAt(idx);
@@ -435,6 +425,8 @@ namespace Nyorowrl.Assetfork.Editor
         private void ApplyConfigChange(SyncConfig config)
         {
             EditorUtility.SetDirty(_settings);
+            if (string.IsNullOrEmpty(config.sourcePath) || string.IsNullOrEmpty(config.destinationPath))
+                return;
             AssetSyncer.SyncConfig(config);
         }
 

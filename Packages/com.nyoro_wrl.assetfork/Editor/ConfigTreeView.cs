@@ -27,7 +27,7 @@ namespace Nyorowrl.Assetfork.Editor
             _onEnabledChanged = onEnabledChanged;
             _onRenamed = onRenamed;
             _onDeleted = onDeleted;
-            showAlternatingRowBackgrounds = true;
+            showAlternatingRowBackgrounds = false;
             showBorder = true;
             Reload();
         }
@@ -97,6 +97,25 @@ namespace Nyorowrl.Assetfork.Editor
             args.rowRect = new Rect(toggleRect.xMax + 2, row.y, row.xMax - toggleRect.xMax - 2, row.height);
             base.RowGUI(args);
             GUI.color = Color.white;
+        }
+
+        protected override void KeyEvent()
+        {
+            base.KeyEvent();
+
+            Event evt = Event.current;
+            if (evt == null || evt.type != EventType.KeyDown || EditorGUIUtility.editingTextField)
+                return;
+
+            if ((evt.keyCode != KeyCode.Delete && evt.keyCode != KeyCode.Backspace) || !HasSelection())
+                return;
+
+            int selectedId = GetSelection()[0];
+            if (selectedId < 0 || Settings == null || selectedId >= Settings.syncConfigs.Count)
+                return;
+
+            _onDeleted?.Invoke(selectedId);
+            evt.Use();
         }
 
         public void SelectAndBeginRename(int id)
