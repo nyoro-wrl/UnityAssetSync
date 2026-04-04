@@ -1,8 +1,7 @@
 {
     "name": "Nyorowrl.AssetSync.Editor.Tests",
     "references": [
-        "Nyorowrl.AssetSync.Editor",
-        "Nyorowrl.AssetSync"
+        "Nyorowrl.AssetSync.Editor"
     ],
     "optionalUnityReferences": [
         "TestAssemblies"
