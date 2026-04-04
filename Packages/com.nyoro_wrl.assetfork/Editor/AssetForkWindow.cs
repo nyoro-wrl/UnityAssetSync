@@ -199,7 +199,7 @@ namespace Nyorowrl.Assetfork.Editor
             {
                 Undo.RecordObject(_settings, "Toggle Config");
                 config.enabled = newEnabled;
-                ApplyConfigChange(config);
+                ApplyEnableStateChange(config);
             }
 
             var srcObj = string.IsNullOrEmpty(config.sourcePath)
@@ -493,8 +493,23 @@ namespace Nyorowrl.Assetfork.Editor
         private void ApplyConfigChange(SyncConfig config)
         {
             EditorUtility.SetDirty(_settings);
+            if (!config.enabled)
+            {
+                AssetSyncer.PruneOwnedPathsForDisabledConfig(config);
+                return;
+            }
             if (string.IsNullOrEmpty(config.sourcePath) || string.IsNullOrEmpty(config.destinationPath))
                 return;
+            AssetSyncer.SyncConfig(config);
+        }
+
+        private void ApplyEnableStateChange(SyncConfig config)
+        {
+            EditorUtility.SetDirty(_settings);
+            if (string.IsNullOrEmpty(config.sourcePath) || string.IsNullOrEmpty(config.destinationPath))
+                return;
+
+            // Explicit enable toggle is the only time disabled-state sync cleanup should run.
             AssetSyncer.SyncConfig(config);
         }
 

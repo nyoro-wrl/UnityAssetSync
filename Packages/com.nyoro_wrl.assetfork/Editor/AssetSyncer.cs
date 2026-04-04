@@ -160,6 +160,30 @@ namespace Nyorowrl.Assetfork.Editor
             stateChanged |= SetOwnedPaths(config, owned);
         }
 
+        internal static bool PruneOwnedPathsForDisabledConfig(SyncConfig config)
+        {
+            if (config?.ownedRelativePaths == null || config.ownedRelativePaths.Count == 0)
+                return false;
+
+            var owned = new HashSet<string>(config.ownedRelativePaths, StringComparer.OrdinalIgnoreCase);
+            HashSet<string> destinationProtected = CollectDestinationProtectedRelativePaths(config);
+
+            bool removedAny = false;
+            foreach (string rel in owned.ToList())
+            {
+                if (destinationProtected.Contains(rel))
+                    continue;
+
+                owned.Remove(rel);
+                removedAny = true;
+            }
+
+            if (!removedAny)
+                return false;
+
+            return SetOwnedPaths(config, owned);
+        }
+
         private static bool ValidateSyncConfig(SyncConfig config)
         {
             if (config == null || !config.enabled)

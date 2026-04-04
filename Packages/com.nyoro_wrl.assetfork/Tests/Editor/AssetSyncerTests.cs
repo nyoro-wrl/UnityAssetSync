@@ -913,6 +913,33 @@ namespace Nyorowrl.Assetfork.Editor.Tests
         }
 
         [Test]
+        public void PruneOwnedPathsForDisabledConfig_RemoveDestinationProtection_RemovesOwnedWithoutDeleting()
+        {
+            var config = MakeConfig();
+            WriteSrc("file.txt", "v1");
+            AssetSyncer.SyncConfig(config);
+            Assert.IsTrue(DstExists("file.txt"));
+            Assert.IsTrue(OwnedContains(config, "file.txt"));
+
+            AssetDatabase.Refresh();
+            string dstGuid = AssetDatabase.AssetPathToGUID(_dstAssetPath + "/file.txt");
+            Assume.That(!string.IsNullOrEmpty(dstGuid), "destination guid must be available");
+            config.protectedGuids.Add(dstGuid);
+
+            config.enabled = false;
+            AssetSyncer.SyncConfig(config);
+            Assert.IsTrue(DstExists("file.txt"), "destination protected file should remain when disabled");
+            Assert.IsTrue(OwnedContains(config, "file.txt"), "owned should remain while destination is protected");
+
+            config.protectedGuids.Remove(dstGuid);
+            bool changed = AssetSyncer.PruneOwnedPathsForDisabledConfig(config);
+
+            Assert.IsTrue(changed, "removing destination protection while disabled should drop owned state");
+            Assert.IsTrue(DstExists("file.txt"), "pruning ownership must not delete destination file");
+            Assert.IsFalse(OwnedContains(config, "file.txt"), "destination file should become unowned");
+        }
+
+        [Test]
         public void CollectSyncedDestinationOwnedRelativePaths_ExcludesDestinationProtected()
         {
             var config = MakeConfig();
