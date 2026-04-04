@@ -1,9 +1,9 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace Nyorowrl.Assetfork
+namespace Nyorowrl.AssetSync
 {
-    public class AssetForkSettings : ScriptableObject
+    public class AssetSyncSettings : ScriptableObject
     {
         public List<SyncConfig> syncConfigs = new List<SyncConfig>();
     }

@@ -3,16 +3,16 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEngine;
-using Nyorowrl.Assetfork;
+using Nyorowrl.AssetSync;
 
-namespace Nyorowrl.Assetfork.Editor
+namespace Nyorowrl.AssetSync.Editor
 {
     internal class ConfigTreeView : TreeView<int>
     {
         private const int AddRowId = -2;
         private const float ListRowHeight = 22f;
 
-        public AssetForkSettings Settings { get; set; }
+        public AssetSyncSettings Settings { get; set; }
 
         private readonly Action<SyncConfig, string> _onRenamed;
         private readonly Action<int> _onDeleted;
@@ -21,7 +21,7 @@ namespace Nyorowrl.Assetfork.Editor
         public int SelectedIndex =>
             HasSelection() ? GetSelection()[0] : -1;
 
-        public ConfigTreeView(TreeViewState<int> state, AssetForkSettings settings,
+        public ConfigTreeView(TreeViewState<int> state, AssetSyncSettings settings,
             Action<SyncConfig, string> onRenamed,
             Action<int> onDeleted, Action onAddRequested)
             : base(state)

@@ -65,4 +65,4 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Added
 
-- Initial release of AssetFork with folder-to-folder synchronization and type-based filtering.
+- Initial release of AssetSync with folder-to-folder synchronization and type-based filtering.

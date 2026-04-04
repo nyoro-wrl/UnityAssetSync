@@ -4,15 +4,15 @@ using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEditorInternal;
 using UnityEngine;
-using Nyorowrl.Assetfork;
+using Nyorowrl.AssetSync;
 
-namespace Nyorowrl.Assetfork.Editor
+namespace Nyorowrl.AssetSync.Editor
 {
-    public class AssetForkWindow : EditorWindow
+    public class AssetSyncWindow : EditorWindow
     {
-        private const string SettingsPathPrefKey = "AssetFork.SettingsPath";
+        private const string SettingsPathPrefKey = "AssetSync.SettingsPath";
 
-        private AssetForkSettings _settings;
+        private AssetSyncSettings _settings;
         private Vector2 _detailScrollPosition;
         private float _listPanelWidth = 150f;
         private bool _isResizing;
@@ -29,10 +29,10 @@ namespace Nyorowrl.Assetfork.Editor
 
         private int SelectedConfigIndex => _configTreeView?.SelectedIndex ?? -1;
 
-        [MenuItem("Window/AssetFork")]
+        [MenuItem("Window/AssetSync")]
         public static void Open()
         {
-            GetWindow<AssetForkWindow>("AssetFork");
+            GetWindow<AssetSyncWindow>("AssetSync");
         }
 
         private void OnEnable()
@@ -44,7 +44,7 @@ namespace Nyorowrl.Assetfork.Editor
 
             string savedPath = EditorPrefs.GetString(SettingsPathPrefKey, "");
             if (!string.IsNullOrEmpty(savedPath))
-                _settings = AssetDatabase.LoadAssetAtPath<AssetForkSettings>(savedPath);
+                _settings = AssetDatabase.LoadAssetAtPath<AssetSyncSettings>(savedPath);
 
             RebuildTreeView();
         }
@@ -72,7 +72,7 @@ namespace Nyorowrl.Assetfork.Editor
             if (_settings == null)
             {
                 EditorGUILayout.Space();
-                EditorGUILayout.HelpBox("Settings を選択するか New ボタンで新しい設定ファイルを作成してください。", MessageType.Info);
+                EditorGUILayout.HelpBox("Assign settings or create a new settings file with the New button.", MessageType.Info);
                 return;
             }
 
@@ -98,7 +98,7 @@ namespace Nyorowrl.Assetfork.Editor
             {
 
                 EditorGUI.BeginChangeCheck();
-                _settings = (AssetForkSettings)EditorGUILayout.ObjectField("Settings", _settings, typeof(AssetForkSettings), false);
+                _settings = (AssetSyncSettings)EditorGUILayout.ObjectField("Settings", _settings, typeof(AssetSyncSettings), false);
                 if (EditorGUI.EndChangeCheck())
                 {
                     _typesLists.Clear();
@@ -111,14 +111,14 @@ namespace Nyorowrl.Assetfork.Editor
                 if (GUILayout.Button("New", GUILayout.Width(50)))
                 {
                     string path = EditorUtility.SaveFilePanelInProject(
-                        "Create AssetFork Settings",
-                        "AssetForkSettings",
+                        "Create AssetSync Settings",
+                        "AssetSyncSettings",
                         "asset",
-                        "Create a new AssetFork settings file");
+                        "Create a new AssetSync settings file");
 
                     if (!string.IsNullOrEmpty(path))
                     {
-                        var newSettings = CreateInstance<AssetForkSettings>();
+                        var newSettings = CreateInstance<AssetSyncSettings>();
                         AssetDatabase.CreateAsset(newSettings, path);
                         AssetDatabase.SaveAssets();
                         _settings = newSettings;
@@ -198,7 +198,7 @@ namespace Nyorowrl.Assetfork.Editor
                 int idx = SelectedConfigIndex;
                 if (idx < 0 || idx >= _settings.syncConfigs.Count)
                 {
-                    GUILayout.Label("リストから Config を選択してください。", EditorStyles.centeredGreyMiniLabel);
+                    GUILayout.Label("Select a config from the list.", EditorStyles.centeredGreyMiniLabel);
                     return;
                 }
 
@@ -222,7 +222,7 @@ namespace Nyorowrl.Assetfork.Editor
                     string selectedPath = AssetDatabase.GetAssetPath(newSrcObj);
                     if (!string.IsNullOrEmpty(selectedPath) && !AssetDatabase.IsValidFolder(selectedPath))
                     {
-                        Debug.LogWarning("[AssetFork] Source must be a folder.");
+                        Debug.LogWarning("[AssetSync] Source must be a folder.");
                     }
                     else
                     {
@@ -240,7 +240,7 @@ namespace Nyorowrl.Assetfork.Editor
                     string selectedPath = AssetDatabase.GetAssetPath(newDstObj);
                     if (!string.IsNullOrEmpty(selectedPath) && !AssetDatabase.IsValidFolder(selectedPath))
                     {
-                        Debug.LogWarning("[AssetFork] Destination must be a folder.");
+                        Debug.LogWarning("[AssetSync] Destination must be a folder.");
                     }
                     else
                     {

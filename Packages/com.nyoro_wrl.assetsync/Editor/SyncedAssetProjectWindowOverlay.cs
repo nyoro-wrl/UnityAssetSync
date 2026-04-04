@@ -2,15 +2,15 @@ using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
-using Nyorowrl.Assetfork;
+using Nyorowrl.AssetSync;
 
-namespace Nyorowrl.Assetfork.Editor
+namespace Nyorowrl.AssetSync.Editor
 {
     [InitializeOnLoad]
     internal static class SyncedAssetProjectWindowOverlay
     {
         private const double AutoRefreshIntervalSeconds = 2.0d;
-        private const string CustomBadgeIconPath = "Packages/com.nyoro_wrl.assetfork/Editor/Icons/icon.png";
+        private const string CustomBadgeIconPath = "Packages/com.nyoro_wrl.assetsync/Editor/Icons/icon.png";
 
         private static readonly HashSet<string> SyncedAssetPaths = new HashSet<string>(StringComparer.Ordinal);
 
@@ -59,11 +59,11 @@ namespace Nyorowrl.Assetfork.Editor
         {
             SyncedAssetPaths.Clear();
 
-            string[] settingsGuids = AssetDatabase.FindAssets("t:AssetForkSettings");
+            string[] settingsGuids = AssetDatabase.FindAssets("t:AssetSyncSettings");
             foreach (string settingsGuid in settingsGuids)
             {
                 string settingsPath = AssetDatabase.GUIDToAssetPath(settingsGuid);
-                var settings = AssetDatabase.LoadAssetAtPath<AssetForkSettings>(settingsPath);
+                var settings = AssetDatabase.LoadAssetAtPath<AssetSyncSettings>(settingsPath);
                 if (settings == null || settings.syncConfigs == null)
                     continue;
 

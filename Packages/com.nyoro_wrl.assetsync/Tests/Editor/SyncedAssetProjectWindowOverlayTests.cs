@@ -5,10 +5,10 @@ using System.Reflection;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
-using Nyorowrl.Assetfork;
-using Nyorowrl.Assetfork.Editor;
+using Nyorowrl.AssetSync;
+using Nyorowrl.AssetSync.Editor;
 
-namespace Nyorowrl.Assetfork.Editor.Tests
+namespace Nyorowrl.AssetSync.Editor.Tests
 {
     public class SyncedAssetProjectWindowOverlayTests
     {
@@ -20,7 +20,7 @@ namespace Nyorowrl.Assetfork.Editor.Tests
         public void SetUp()
         {
             string uid = Guid.NewGuid().ToString("N").Substring(0, 8);
-            _testRoot = "Assets/AssetForkOverlayTest_" + uid;
+            _testRoot = "Assets/AssetSyncOverlayTest_" + uid;
             _srcAssetPath = _testRoot + "/Src";
             _dstAssetPath = _testRoot + "/Dst";
 
@@ -55,7 +55,7 @@ namespace Nyorowrl.Assetfork.Editor.Tests
             string ignoreGuid = AssetDatabase.AssetPathToGUID(ignoreDestinationAssetPath);
             Assume.That(!string.IsNullOrEmpty(ignoreGuid), "destination ignore asset guid must exist");
 
-            var settings = ScriptableObject.CreateInstance<AssetForkSettings>();
+            var settings = ScriptableObject.CreateInstance<AssetSyncSettings>();
             settings.syncConfigs = new List<SyncConfig>
             {
                 new SyncConfig
@@ -69,7 +69,7 @@ namespace Nyorowrl.Assetfork.Editor.Tests
                 }
             };
 
-            string settingsAssetPath = _testRoot + "/AssetForkOverlaySettings.asset";
+            string settingsAssetPath = _testRoot + "/AssetSyncOverlaySettings.asset";
             AssetDatabase.CreateAsset(settings, settingsAssetPath);
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
@@ -103,7 +103,7 @@ namespace Nyorowrl.Assetfork.Editor.Tests
             File.WriteAllText(Path.Combine(projectRoot, _dstAssetPath, relativePath), "dst");
             AssetDatabase.Refresh();
 
-            var settings = ScriptableObject.CreateInstance<AssetForkSettings>();
+            var settings = ScriptableObject.CreateInstance<AssetSyncSettings>();
             settings.syncConfigs = new List<SyncConfig>
             {
                 new SyncConfig
@@ -117,7 +117,7 @@ namespace Nyorowrl.Assetfork.Editor.Tests
                 }
             };
 
-            string settingsAssetPath = _testRoot + "/AssetForkOverlayDisabledSettings.asset";
+            string settingsAssetPath = _testRoot + "/AssetSyncOverlayDisabledSettings.asset";
             AssetDatabase.CreateAsset(settings, settingsAssetPath);
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();

@@ -1,7 +1,7 @@
 {
   "dependencies": {
-    "com.nyoro_wrl.assetfork": {
-      "version": "file:com.nyoro_wrl.assetfork",
+    "com.nyoro_wrl.assetsync": {
+      "version": "file:com.nyoro_wrl.assetsync",
       "depth": 0,
       "source": "embedded",
       "dependencies": {}

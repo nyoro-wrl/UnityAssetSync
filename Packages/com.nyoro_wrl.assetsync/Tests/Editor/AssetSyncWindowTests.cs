@@ -5,12 +5,12 @@ using System.Reflection;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
-using Nyorowrl.Assetfork;
-using Nyorowrl.Assetfork.Editor;
+using Nyorowrl.AssetSync;
+using Nyorowrl.AssetSync.Editor;
 
-namespace Nyorowrl.Assetfork.Editor.Tests
+namespace Nyorowrl.AssetSync.Editor.Tests
 {
-    public class AssetForkWindowTests
+    public class AssetSyncWindowTests
     {
         private string _testRoot;
         private string _srcAssetPath;
@@ -22,7 +22,7 @@ namespace Nyorowrl.Assetfork.Editor.Tests
         public void SetUp()
         {
             string uid = Guid.NewGuid().ToString("N").Substring(0, 8);
-            _testRoot = "Assets/AssetForkWindowTest_" + uid;
+            _testRoot = "Assets/AssetSyncWindowTest_" + uid;
             _srcAssetPath = _testRoot + "/Src";
             _dstAssetPath = _testRoot + "/Dst";
 
@@ -78,15 +78,15 @@ namespace Nyorowrl.Assetfork.Editor.Tests
             config.ignoreGuids.Remove(dstGuid);
             Assert.IsTrue(config.syncRelativePaths.Contains("file.txt"), "synced path should still exist before apply");
 
-            var settings = ScriptableObject.CreateInstance<AssetForkSettings>();
+            var settings = ScriptableObject.CreateInstance<AssetSyncSettings>();
             settings.syncConfigs = new List<SyncConfig> { config };
 
-            var window = ScriptableObject.CreateInstance<AssetForkWindow>();
-            var settingsField = typeof(AssetForkWindow).GetField("_settings", BindingFlags.NonPublic | BindingFlags.Instance);
+            var window = ScriptableObject.CreateInstance<AssetSyncWindow>();
+            var settingsField = typeof(AssetSyncWindow).GetField("_settings", BindingFlags.NonPublic | BindingFlags.Instance);
             Assert.IsNotNull(settingsField, "_settings field not found");
             settingsField.SetValue(window, settings);
 
-            MethodInfo applyConfigChangeMethod = typeof(AssetForkWindow).GetMethod("ApplyConfigChange", BindingFlags.NonPublic | BindingFlags.Instance);
+            MethodInfo applyConfigChangeMethod = typeof(AssetSyncWindow).GetMethod("ApplyConfigChange", BindingFlags.NonPublic | BindingFlags.Instance);
             Assert.IsNotNull(applyConfigChangeMethod, "ApplyConfigChange method not found");
             applyConfigChangeMethod.Invoke(window, new object[] { config });
 
@@ -106,10 +106,10 @@ namespace Nyorowrl.Assetfork.Editor.Tests
             try
             {
                 config.enabled = true;
-                MethodInfo applyEnableStateChangeMethod = typeof(AssetForkWindow).GetMethod("ApplyEnableStateChange", BindingFlags.NonPublic | BindingFlags.Instance);
+                MethodInfo applyEnableStateChangeMethod = typeof(AssetSyncWindow).GetMethod("ApplyEnableStateChange", BindingFlags.NonPublic | BindingFlags.Instance);
                 Assert.IsNotNull(applyEnableStateChangeMethod, "ApplyEnableStateChange method not found");
                 applyEnableStateChangeMethod.Invoke(window, new object[] { config });
-                MethodInfo flushDeferredSyncActionsMethod = typeof(AssetForkWindow).GetMethod("FlushDeferredSyncActions", BindingFlags.NonPublic | BindingFlags.Instance);
+                MethodInfo flushDeferredSyncActionsMethod = typeof(AssetSyncWindow).GetMethod("FlushDeferredSyncActions", BindingFlags.NonPublic | BindingFlags.Instance);
                 Assert.IsNotNull(flushDeferredSyncActionsMethod, "FlushDeferredSyncActions method not found");
                 flushDeferredSyncActionsMethod.Invoke(window, null);
 
