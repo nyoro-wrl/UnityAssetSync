@@ -13,19 +13,34 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Added config-synced path tracking with `syncRelativePaths`.
 - Added manual ignore asset list with `ignoreGuids` (GUID-based).
 - Added conflict resolution dialog for existing destination unsynced file collisions.
-- Added Ignore list UI in the editor window with `Source`/`Destination`/`Invalid` states.
+- Added list-style `Ignore Assets` UI in the editor window.
+- Added synced-asset badge overlay in the Project window using the packaged icon.
 
 ### Changed
 
-- Changed sync state model to derive `Unsynced` as `!Sync && !Ignore`.
+- Changed terminology from `Protected/Owned` to `Ignore/Sync`.
 - Changed sync truth source to `SyncConfig` state only (Git-managed settings asset).
-- Allowed nested Source/Destination paths when `Include Subdirectories` is off.
+- Changed conflict dialog actions to user-facing `Overwrite` / `Keep` with improved path affordance.
+- Changed disabled-config behavior to remove destination files tracked as `Sync` while preserving destination `Ignore` and manual files.
+- Changed synced badge rules to hide badges for destination `Ignore` assets and disabled configs.
 
 ### Fixed
 
 - Prevented automatic overwrite on destination existing unsynced collisions.
 - Ensured ignore destination files are excluded from copy/update/delete effects.
 - Ensured source-ignore files behave the same as source type-excluded assets.
+- Fixed sync-state persistence for destination `Ignore` assets.
+- Fixed unignore-while-disabled flow to drop `Sync` state without deleting the destination file.
+- Fixed conflict dialog IMGUI layout errors when closing the dialog.
+
+## [1.0.1] - 2026-04-04
+
+### Changed
+
+- Allowed nested Source/Destination paths when `Include Subdirectories` is off.
+
+### Fixed
+
 - Kept nested path safety checks active when switching `Include Subdirectories` on.
 - Remapped config source/destination paths automatically when selected folders are moved.
 

@@ -22,7 +22,11 @@ Install this package with the Unity Package Manager.
    - `Exclude = off`: include matching asset types.
    - `Exclude = on`: exclude matching asset types.
    - `Multiple Types = on`: one filter condition can match any of several types.
-7. Edit assets in the source folder. AssetFork re-syncs automatically.
+7. Optionally add assets to `Ignore Assets`:
+   - source-ignore: treated as sync-excluded.
+   - destination-ignore: never copied/updated/deleted by sync.
+8. If a destination file already exists as unsynced, resolve it in the conflict dialog with `Overwrite` or `Keep`.
+9. Edit assets in the source folder. AssetFork re-syncs automatically.
 
 ## Sync behavior
 
@@ -31,7 +35,9 @@ Install this package with the Unity Package Manager.
 - Tracks synchronized files per config in `SyncConfig.syncRelativePaths` (saved in settings assets).
 - Supports manual `Ignore` entries (GUID-based): destination-ignore files are never copied/updated/deleted.
 - Treats source-ignore files as sync-excluded (same behavior as filter exclusion).
-- If a destination file already exists and is neither synced nor ignore, AssetFork opens a conflict dialog to choose `Sync` or `Ignore`.
+- If a destination file already exists and is neither sync nor ignore, AssetFork opens a conflict dialog to choose `Overwrite` or `Keep`.
+- Disabling a config removes destination files tracked as sync, while preserving manual files and destination-ignore files.
+- Synced destination assets are shown with an icon badge in the Project window (excluded for destination-ignore or disabled configs).
 - If selected source or destination folders are moved, stored config paths are remapped automatically.
 
 ## Safety rules
@@ -52,8 +58,9 @@ Install this package with the Unity Package Manager.
 |---|---|
 | `Editor/AssetForkWindow.cs` | Main UI for config management. |
 | `Editor/AssetSyncer.cs` | File synchronization and postprocess trigger logic. |
-| `Editor/ConflictResolutionDialog.cs` | Batch conflict resolution dialog (`Sync` / `Ignore`). |
+| `Editor/ConflictResolutionDialog.cs` | Batch conflict resolution dialog (`Overwrite` / `Keep`). |
 | `Editor/ConfigTreeView.cs` | Config list/tree UI. |
 | `Editor/TypeSelectorDropdown.cs` | Type selection dropdown for filters. |
+| `Editor/SyncedAssetProjectWindowOverlay.cs` | Project-window icon overlay for synced destination assets. |
 | `Runtime/*.cs` | Serializable config models (`AssetForkSettings`, `SyncConfig`, `FilterCondition`) compiled for Editor only. |
 | `Tests/Editor/*` | Editor tests for sync and filter logic. |
