@@ -17,7 +17,7 @@ namespace Nyorowrl.Assetfork.Editor
         private const float MaxListHeight = 430f;
         private const float RowVerticalSpacing = 4f;
         private const float WindowPadding = 6f;
-        private static readonly string[] ActionLabels = { "Overwrite", "Ignore" };
+        private static readonly string[] ActionLabels = { "Overwrite", "Keep" };
         private static GUIStyle _pathButtonStyle;
         private static readonly Dictionary<SyncConfig, Dictionary<string, AssetSyncer.ConflictResolution>> PendingDecisionsByConfig
             = new Dictionary<SyncConfig, Dictionary<string, AssetSyncer.ConflictResolution>>();
@@ -106,7 +106,7 @@ namespace Nyorowrl.Assetfork.Editor
 
             EditorGUI.LabelField(
                 new Rect(WindowPadding, y, width, lineHeight),
-                "Destination files already exist. Choose Overwrite or Ignore for each conflict.");
+                "Destination files already exist. Choose Overwrite or Keep for each conflict.");
             y += lineHeight + 4f;
 
             float footerTop = position.height - WindowPadding - footerBoxHeight;
@@ -221,8 +221,11 @@ namespace Nyorowrl.Assetfork.Editor
             {
                 EditorGUILayout.LabelField(label, GUILayout.Width(120f));
                 GUIStyle style = GetPathButtonStyle();
-                if (GUILayout.Button(string.IsNullOrEmpty(assetPath) ? "(Unknown)" : assetPath, style))
+                string displayPath = string.IsNullOrEmpty(assetPath) ? "(Unknown)" : assetPath;
+                if (GUILayout.Button(displayPath, style))
                     SelectAssetInProject(assetPath);
+
+                EditorGUIUtility.AddCursorRect(GUILayoutUtility.GetLastRect(), MouseCursor.Link);
             }
         }
 
@@ -244,7 +247,7 @@ namespace Nyorowrl.Assetfork.Editor
             if (_pathButtonStyle != null)
                 return _pathButtonStyle;
 
-            _pathButtonStyle = new GUIStyle(EditorStyles.label)
+            _pathButtonStyle = new GUIStyle(EditorStyles.linkLabel)
             {
                 alignment = TextAnchor.MiddleLeft,
                 clipping = TextClipping.Clip,
