@@ -1,9 +1,10 @@
 {
 	"name": "com.nyoro_wrl.assetfork",
 	"displayName": "AssetFork",
-	"version": "0.1.0",
+	"version": "1.0.0",
 	"unity": "6000.3",
 	"unityRelease": "9f1",
+	"license": "MIT",
 	"description": "Editor-only asset synchronization tool. Mirrors files from a source folder to a destination folder and supports type-based include/exclude filters.",
 	"dependencies": {
 		"com.unity.test-framework": "1.6.0"
