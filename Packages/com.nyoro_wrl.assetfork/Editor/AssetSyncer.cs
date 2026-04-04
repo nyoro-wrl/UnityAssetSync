@@ -21,16 +21,18 @@ namespace Nyorowrl.Assetfork.Editor
             public List<string> files = new List<string>();
         }
 
-        public static void SyncAll(AssetForkSettings settings)
+        public static int SyncAll(AssetForkSettings settings)
         {
+            int total = 0;
             foreach (var config in settings.syncConfigs)
-                SyncConfig(config);
+                total += SyncConfig(config);
+            return total;
         }
 
-        public static void SyncConfig(SyncConfig config)
+        public static int SyncConfig(SyncConfig config)
         {
             if (!config.enabled)
-                return;
+                return 0;
 
             string srcAssetPath = config.sourcePath;
             string dstAssetPath = config.destinationPath;
@@ -38,13 +40,13 @@ namespace Nyorowrl.Assetfork.Editor
             if (string.IsNullOrEmpty(srcAssetPath) || string.IsNullOrEmpty(dstAssetPath))
             {
                 Debug.LogWarning($"[AssetFork] '{config.configName}': Source or Destination is not set.");
-                return;
+                return 0;
             }
 
             if (srcAssetPath == dstAssetPath)
             {
                 Debug.LogWarning($"[AssetFork] '{config.configName}': Source and Destination are the same directory.");
-                return;
+                return 0;
             }
 
             string srcRoot = ToFullPath(srcAssetPath);
@@ -53,20 +55,22 @@ namespace Nyorowrl.Assetfork.Editor
             if (!Directory.Exists(srcRoot))
             {
                 Debug.LogWarning($"[AssetFork] '{config.configName}': Source directory does not exist: {srcRoot}");
-                return;
+                return 0;
             }
 
             Directory.CreateDirectory(dstRoot);
 
-            SyncDirectory(srcRoot, dstRoot, srcAssetPath, dstAssetPath, config.filters);
+            int count = SyncDirectory(srcRoot, dstRoot, srcAssetPath, dstAssetPath, config.filters);
             AssetDatabase.Refresh();
+            return count;
         }
 
-        private static void SyncDirectory(string srcRoot, string dstRoot, string srcAssetRoot, string dstAssetRoot, List<FilterCondition> filters)
+        private static int SyncDirectory(string srcRoot, string dstRoot, string srcAssetRoot, string dstAssetRoot, List<FilterCondition> filters)
         {
             string manifestPath = GetManifestPath(dstAssetRoot);
             HashSet<string> manifest = LoadManifest(manifestPath);
             bool manifestChanged = false;
+            int copiedCount = 0;
 
             // Phase 1: Copy new and updated files
             string[] srcFiles = Directory.GetFiles(srcRoot, "*", SearchOption.AllDirectories)
@@ -88,6 +92,7 @@ namespace Nyorowrl.Assetfork.Editor
                 {
                     Directory.CreateDirectory(Path.GetDirectoryName(dstFile));
                     File.Copy(srcFile, dstFile, overwrite: true);
+                    copiedCount++;
                 }
 
                 // マニフェストに記録（同期管理対象として登録）
@@ -147,6 +152,8 @@ namespace Nyorowrl.Assetfork.Editor
 
             if (manifestChanged)
                 SaveManifest(manifestPath, manifest);
+
+            return copiedCount;
         }
 
         private static string GetManifestPath(string dstAssetRoot)

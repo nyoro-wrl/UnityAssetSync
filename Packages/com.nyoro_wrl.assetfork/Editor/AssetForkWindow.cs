@@ -1,5 +1,7 @@
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
+using UnityEditorInternal;
 using UnityEngine;
 using Nyorowrl.Assetfork;
 
@@ -10,8 +12,20 @@ namespace Nyorowrl.Assetfork.Editor
         private const string SettingsPathPrefKey = "AssetFork.SettingsPath";
 
         private AssetForkSettings _settings;
-        private Vector2 _scrollPosition;
-        private int _selectedConfigIndex = -1;
+        private Vector2 _detailScrollPosition;
+        private float _listPanelWidth = 150f;
+        private bool _isResizing;
+        private string _statusMessage = "";
+
+        // Config リスト (TreeView)
+        [SerializeField] private TreeViewState<int> _treeViewState;
+        private ConfigTreeView _configTreeView;
+
+        // Multiple Types の ReorderableList キャッシュ
+        private readonly Dictionary<FilterCondition, ReorderableList> _typesLists =
+            new Dictionary<FilterCondition, ReorderableList>();
+
+        private int SelectedConfigIndex => _configTreeView?.SelectedIndex ?? -1;
 
         [MenuItem("Window/AssetFork")]
         public static void Open()
@@ -21,9 +35,37 @@ namespace Nyorowrl.Assetfork.Editor
 
         private void OnEnable()
         {
+            minSize = new Vector2(480, 320);
+
+            if (_treeViewState == null)
+                _treeViewState = new TreeViewState<int>();
+
             string savedPath = EditorPrefs.GetString(SettingsPathPrefKey, "");
             if (!string.IsNullOrEmpty(savedPath))
                 _settings = AssetDatabase.LoadAssetAtPath<AssetForkSettings>(savedPath);
+
+            RebuildTreeView();
+        }
+
+        private void RebuildTreeView()
+        {
+            _configTreeView = new ConfigTreeView(
+                _treeViewState,
+                _settings,
+                onEnabledChanged: (config, newEnabled) =>
+                {
+                    Undo.RecordObject(_settings, "Toggle Config");
+                    config.enabled = newEnabled;
+                    ApplyConfigChange(config);
+                },
+                onRenamed: (config, newName) =>
+                {
+                    Undo.RecordObject(_settings, "Rename Config");
+                    config.configName = newName;
+                    EditorUtility.SetDirty(_settings);
+                },
+                onDeleted: DeleteConfig
+            );
         }
 
         private void OnGUI()
@@ -31,7 +73,11 @@ namespace Nyorowrl.Assetfork.Editor
             DrawSettingsField();
 
             if (_settings == null)
+            {
+                EditorGUILayout.Space();
+                EditorGUILayout.HelpBox("Settings を選択するか、New ボタンで新しい設定ファイルを作成してください。", MessageType.Info);
                 return;
+            }
 
             EditorGUILayout.Space();
             DrawToolbar();
@@ -39,8 +85,11 @@ namespace Nyorowrl.Assetfork.Editor
 
             EditorGUILayout.BeginHorizontal();
             DrawConfigList();
+            DrawResizeHandle();
             DrawConfigDetail();
             EditorGUILayout.EndHorizontal();
+
+            DrawStatusBar();
         }
 
         private void DrawSettingsField()
@@ -51,9 +100,10 @@ namespace Nyorowrl.Assetfork.Editor
             _settings = (AssetForkSettings)EditorGUILayout.ObjectField("Settings", _settings, typeof(AssetForkSettings), false);
             if (EditorGUI.EndChangeCheck())
             {
-                _selectedConfigIndex = -1;
+                _typesLists.Clear();
                 string path = _settings != null ? AssetDatabase.GetAssetPath(_settings) : "";
                 EditorPrefs.SetString(SettingsPathPrefKey, path);
+                RebuildTreeView();
             }
 
             if (GUILayout.Button("New", GUILayout.Width(50)))
@@ -70,8 +120,9 @@ namespace Nyorowrl.Assetfork.Editor
                     AssetDatabase.CreateAsset(newSettings, path);
                     AssetDatabase.SaveAssets();
                     _settings = newSettings;
-                    _selectedConfigIndex = -1;
+                    _typesLists.Clear();
                     EditorPrefs.SetString(SettingsPathPrefKey, path);
+                    RebuildTreeView();
                 }
             }
 
@@ -82,80 +133,107 @@ namespace Nyorowrl.Assetfork.Editor
         {
             EditorGUILayout.BeginHorizontal(EditorStyles.toolbar);
 
-            if (GUILayout.Button("Add Config", EditorStyles.toolbarButton, GUILayout.Width(80)))
+            var addIcon = EditorGUIUtility.IconContent("d_Toolbar Plus");
+            addIcon.tooltip = "Config を追加";
+            if (GUILayout.Button(addIcon, EditorStyles.toolbarButton, GUILayout.Width(28)))
             {
+                Undo.RecordObject(_settings, "Add Config");
                 _settings.syncConfigs.Add(new SyncConfig
                 {
                     configName = $"Config {_settings.syncConfigs.Count + 1}"
                 });
-                _selectedConfigIndex = _settings.syncConfigs.Count - 1;
-                MarkSettingsDirty();
+                EditorUtility.SetDirty(_settings);
+                int newIndex = _settings.syncConfigs.Count - 1;
+                _configTreeView.Reload();
+                _configTreeView.SelectAndBeginRename(newIndex);
             }
 
             GUILayout.FlexibleSpace();
 
-            if (GUILayout.Button("Sync All", EditorStyles.toolbarButton, GUILayout.Width(70)))
-                AssetSyncer.SyncAll(_settings);
+            var syncIcon = EditorGUIUtility.IconContent("d_Refresh");
+            syncIcon.tooltip = "すべて同期";
+            if (GUILayout.Button(syncIcon, EditorStyles.toolbarButton, GUILayout.Width(28)))
+            {
+                int count = AssetSyncer.SyncAll(_settings);
+                _statusMessage = $"Sync All: {count} ファイルをコピー ({System.DateTime.Now:HH:mm:ss})";
+            }
 
             EditorGUILayout.EndHorizontal();
         }
 
         private void DrawConfigList()
         {
-            EditorGUILayout.BeginVertical(GUILayout.Width(150));
-            _scrollPosition = EditorGUILayout.BeginScrollView(_scrollPosition);
+            EditorGUILayout.BeginVertical(GUILayout.Width(_listPanelWidth));
 
-            for (int i = 0; i < _settings.syncConfigs.Count; i++)
+            if (_settings.syncConfigs.Count == 0)
             {
-                var config = _settings.syncConfigs[i];
-                string label = string.IsNullOrEmpty(config.configName) ? $"Config {i + 1}" : config.configName;
-
-                EditorGUILayout.BeginHorizontal();
-
-                EditorGUI.BeginChangeCheck();
-                config.enabled = EditorGUILayout.Toggle(config.enabled, GUILayout.Width(16));
-                if (EditorGUI.EndChangeCheck())
-                    ApplyConfigChange(config);
-
-                bool selected = _selectedConfigIndex == i;
-                GUI.enabled = config.enabled;
-                bool newSelected = GUILayout.Toggle(selected, label, "Button");
-                GUI.enabled = true;
-                if (newSelected && !selected)
-                    _selectedConfigIndex = i;
-
-                EditorGUILayout.EndHorizontal();
+                EditorGUILayout.Space();
+                GUILayout.Label("+ で設定を追加", EditorStyles.centeredGreyMiniLabel);
+            }
+            else
+            {
+                Rect treeRect = GUILayoutUtility.GetRect(
+                    _listPanelWidth, _listPanelWidth,
+                    0, float.MaxValue,
+                    GUILayout.ExpandHeight(true));
+                _configTreeView.OnGUI(treeRect);
             }
 
-            EditorGUILayout.EndScrollView();
             EditorGUILayout.EndVertical();
+        }
+
+        private void DrawResizeHandle()
+        {
+            Rect handleRect = GUILayoutUtility.GetRect(5f, 1f, GUILayout.Width(5f), GUILayout.ExpandHeight(true));
+            EditorGUIUtility.AddCursorRect(handleRect, MouseCursor.ResizeHorizontal);
+
+            EditorGUI.DrawRect(new Rect(handleRect.x + 2, handleRect.y, 1, handleRect.height),
+                new Color(0.5f, 0.5f, 0.5f, 0.4f));
+
+            if (Event.current.type == EventType.MouseDown && handleRect.Contains(Event.current.mousePosition))
+            {
+                _isResizing = true;
+                Event.current.Use();
+            }
+
+            if (_isResizing)
+            {
+                if (Event.current.type == EventType.MouseDrag)
+                {
+                    _listPanelWidth = Mathf.Clamp(_listPanelWidth + Event.current.delta.x, 100f, position.width - 200f);
+                    Repaint();
+                    Event.current.Use();
+                }
+                if (Event.current.type == EventType.MouseUp)
+                {
+                    _isResizing = false;
+                    Event.current.Use();
+                }
+            }
         }
 
         private void DrawConfigDetail()
         {
             EditorGUILayout.BeginVertical();
+            _detailScrollPosition = EditorGUILayout.BeginScrollView(_detailScrollPosition);
 
-            if (_selectedConfigIndex < 0 || _selectedConfigIndex >= _settings.syncConfigs.Count)
+            int idx = SelectedConfigIndex;
+            if (idx < 0 || idx >= _settings.syncConfigs.Count)
             {
-                GUILayout.Label("Select a config from the list.", EditorStyles.centeredGreyMiniLabel);
+                GUILayout.Label("リストから Config を選択してください。", EditorStyles.centeredGreyMiniLabel);
+                EditorGUILayout.EndScrollView();
                 EditorGUILayout.EndVertical();
                 return;
             }
 
-            var config = _settings.syncConfigs[_selectedConfigIndex];
+            var config = _settings.syncConfigs[idx];
 
-            // configName: ラベル変更のみ、同期は不要
-            EditorGUI.BeginChangeCheck();
-            config.configName = EditorGUILayout.TextField("Name", config.configName);
-            if (EditorGUI.EndChangeCheck())
-                MarkSettingsDirty();
-
-            // Source / Destination: 変更時に同期
             var srcObj = string.IsNullOrEmpty(config.sourcePath)
                 ? null : AssetDatabase.LoadAssetAtPath<DefaultAsset>(config.sourcePath);
             var newSrcObj = (DefaultAsset)EditorGUILayout.ObjectField("Source", srcObj, typeof(DefaultAsset), false);
             if (newSrcObj != srcObj)
             {
+                Undo.RecordObject(_settings, "Set Source");
                 config.sourcePath = AssetDatabase.GetAssetPath(newSrcObj);
                 ApplyConfigChange(config);
             }
@@ -165,33 +243,31 @@ namespace Nyorowrl.Assetfork.Editor
             var newDstObj = (DefaultAsset)EditorGUILayout.ObjectField("Destination", dstObj, typeof(DefaultAsset), false);
             if (newDstObj != dstObj)
             {
+                Undo.RecordObject(_settings, "Set Destination");
                 config.destinationPath = AssetDatabase.GetAssetPath(newDstObj);
                 ApplyConfigChange(config);
             }
 
             EditorGUILayout.Space();
             DrawFilterList(config);
-            EditorGUILayout.Space();
-
-            EditorGUILayout.BeginHorizontal();
-
-            if (GUILayout.Button("Sync This Config"))
-                AssetSyncer.SyncConfig(config);
-
-            if (GUILayout.Button("Delete Config"))
-            {
-                _settings.syncConfigs.RemoveAt(_selectedConfigIndex);
-                _selectedConfigIndex = Mathf.Clamp(_selectedConfigIndex - 1, -1, _settings.syncConfigs.Count - 1);
-                MarkSettingsDirty();
-            }
-
-            EditorGUILayout.EndHorizontal();
+            EditorGUILayout.EndScrollView();
             EditorGUILayout.EndVertical();
         }
 
         private void DrawFilterList(SyncConfig config)
         {
+            EditorGUILayout.BeginHorizontal();
             EditorGUILayout.LabelField("Filters", EditorStyles.boldLabel);
+            GUILayout.FlexibleSpace();
+            var addIcon = EditorGUIUtility.IconContent("d_Toolbar Plus");
+            addIcon.tooltip = "フィルターを追加";
+            if (GUILayout.Button(addIcon, EditorStyles.iconButton))
+            {
+                Undo.RecordObject(_settings, "Add Filter");
+                config.filters.Add(new FilterCondition());
+                ApplyConfigChange(config);
+            }
+            EditorGUILayout.EndHorizontal();
 
             int deleteIndex = -1;
             for (int i = 0; i < config.filters.Count; i++)
@@ -199,13 +275,9 @@ namespace Nyorowrl.Assetfork.Editor
 
             if (deleteIndex >= 0)
             {
+                Undo.RecordObject(_settings, "Delete Filter");
+                _typesLists.Remove(config.filters[deleteIndex]);
                 config.filters.RemoveAt(deleteIndex);
-                ApplyConfigChange(config);
-            }
-
-            if (GUILayout.Button("Add Filter"))
-            {
-                config.filters.Add(new FilterCondition());
                 ApplyConfigChange(config);
             }
         }
@@ -213,91 +285,162 @@ namespace Nyorowrl.Assetfork.Editor
         private void DrawFilterCondition(FilterCondition filter, int index, ref int deleteIndex, SyncConfig config)
         {
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+
+            // Exclude + 右端に削除ボタン
             EditorGUILayout.BeginHorizontal();
-
-            EditorGUILayout.LabelField($"Filter {index}", EditorStyles.miniBoldLabel);
-
-            if (GUILayout.Button("Delete", GUILayout.Width(55)))
+            EditorGUI.BeginChangeCheck();
+            bool newInvert = EditorGUILayout.Toggle("Exclude", filter.invert);
+            if (EditorGUI.EndChangeCheck())
+            {
+                Undo.RecordObject(_settings, "Toggle Filter Mode");
+                filter.invert = newInvert;
+                ApplyConfigChange(config);
+            }
+            GUILayout.FlexibleSpace();
+            var deleteFilterIcon = EditorGUIUtility.IconContent("CrossIcon");
+            deleteFilterIcon.tooltip = "フィルターを削除";
+            if (GUILayout.Button(deleteFilterIcon, EditorStyles.iconButton))
                 deleteIndex = index;
-
             EditorGUILayout.EndHorizontal();
 
+            // Multiple Types トグル（切替時に型を引き継ぐ）
             EditorGUI.BeginChangeCheck();
-
-            filter.invert = EditorGUILayout.Toggle("Invert", filter.invert);
-            filter.useMultipleTypes = EditorGUILayout.Toggle("Multiple Types", filter.useMultipleTypes);
-
+            bool newUseMultipleTypes = EditorGUILayout.Toggle("Multiple Types", filter.useMultipleTypes);
             if (EditorGUI.EndChangeCheck())
+            {
+                Undo.RecordObject(_settings, "Change Filter Mode");
+                if (newUseMultipleTypes)
+                {
+                    filter.multipleTypeNames.Clear();
+                    if (!string.IsNullOrEmpty(filter.singleTypeName))
+                        filter.multipleTypeNames.Add(filter.singleTypeName);
+                }
+                else
+                {
+                    filter.singleTypeName = filter.multipleTypeNames.Count > 0
+                        ? filter.multipleTypeNames[0] : "";
+                }
+                filter.useMultipleTypes = newUseMultipleTypes;
+                _typesLists.Remove(filter);
                 ApplyConfigChange(config);
+            }
 
+            // 型セレクタ
+            EditorGUILayout.LabelField("Type", EditorStyles.miniLabel);
             if (filter.useMultipleTypes)
             {
-                EditorGUILayout.LabelField("Types:", EditorStyles.miniLabel);
-                EditorGUI.indentLevel++;
-
-                int removeTypeIndex = -1;
-                for (int i = 0; i < filter.multipleTypeNames.Count; i++)
-                {
-                    EditorGUILayout.BeginHorizontal();
-                    string displayName = NicifyTypeName(filter.multipleTypeNames[i]);
-                    EditorGUILayout.LabelField(displayName, GUILayout.ExpandWidth(true));
-                    int captured = i;
-                    if (GUILayout.Button("...", GUILayout.Width(25)))
-                    {
-                        var dropdown = new TypeSelectorDropdown(new AdvancedDropdownState(),
-                            n => { filter.multipleTypeNames[captured] = n; ApplyConfigChange(config); });
-                        dropdown.Show(GUILayoutUtility.GetLastRect());
-                    }
-                    if (GUILayout.Button("x", GUILayout.Width(20)))
-                        removeTypeIndex = i;
-                    EditorGUILayout.EndHorizontal();
-                }
-                if (removeTypeIndex >= 0)
-                {
-                    filter.multipleTypeNames.RemoveAt(removeTypeIndex);
-                    ApplyConfigChange(config);
-                }
-
-                if (GUILayout.Button("Add Type"))
-                {
-                    filter.multipleTypeNames.Add("");
-                    ApplyConfigChange(config);
-                }
-
-                EditorGUI.indentLevel--;
+                GetOrCreateTypesList(filter, config).DoLayoutList();
             }
             else
             {
-                EditorGUILayout.BeginHorizontal();
-                string display = NicifyTypeName(filter.singleTypeName);
-                EditorGUILayout.LabelField("Type", display);
-                if (GUILayout.Button("Select", GUILayout.Width(55)))
+                string typeDisplay = string.IsNullOrEmpty(filter.singleTypeName)
+                    ? "Type を選択..."
+                    : NicifyTypeName(filter.singleTypeName);
+                if (GUILayout.Button(typeDisplay, EditorStyles.popup))
                 {
                     var dropdown = new TypeSelectorDropdown(new AdvancedDropdownState(),
-                        n => { filter.singleTypeName = n; ApplyConfigChange(config); });
+                        n =>
+                        {
+                            Undo.RecordObject(_settings, "Change Type");
+                            filter.singleTypeName = n;
+                            ApplyConfigChange(config);
+                        });
                     dropdown.Show(GUILayoutUtility.GetLastRect());
                 }
-                EditorGUILayout.EndHorizontal();
             }
 
             EditorGUILayout.EndVertical();
         }
 
-        private void MarkSettingsDirty()
+        private ReorderableList GetOrCreateTypesList(FilterCondition filter, SyncConfig config)
         {
+            if (_typesLists.TryGetValue(filter, out var existing))
+                return existing;
+
+            var list = new ReorderableList(filter.multipleTypeNames, typeof(string),
+                draggable: true, displayHeader: true, displayAddButton: true, displayRemoveButton: true);
+
+            list.drawHeaderCallback = rect => EditorGUI.LabelField(rect, "Types");
+            list.elementHeight = EditorGUIUtility.singleLineHeight + 2;
+
+            list.drawElementCallback = (rect, i, isActive, isFocused) =>
+            {
+                if (i >= filter.multipleTypeNames.Count) return;
+                string display = string.IsNullOrEmpty(filter.multipleTypeNames[i])
+                    ? "Type を選択..." : NicifyTypeName(filter.multipleTypeNames[i]);
+                var btnRect = new Rect(rect.x, rect.y + 1, rect.width, rect.height - 2);
+                int captured = i;
+                if (GUI.Button(btnRect, display, EditorStyles.popup))
+                {
+                    var dropdown = new TypeSelectorDropdown(new AdvancedDropdownState(),
+                        n =>
+                        {
+                            Undo.RecordObject(_settings, "Change Type");
+                            filter.multipleTypeNames[captured] = n;
+                            ApplyConfigChange(config);
+                        });
+                    dropdown.Show(btnRect);
+                }
+            };
+
+            list.onAddCallback = _ =>
+            {
+                Undo.RecordObject(_settings, "Add Type");
+                filter.multipleTypeNames.Add("");
+                ApplyConfigChange(config);
+            };
+
+            list.onRemoveCallback = _ =>
+            {
+                if (list.index >= 0 && list.index < filter.multipleTypeNames.Count)
+                {
+                    Undo.RecordObject(_settings, "Remove Type");
+                    filter.multipleTypeNames.RemoveAt(list.index);
+                    ApplyConfigChange(config);
+                }
+            };
+
+            _typesLists[filter] = list;
+            return list;
+        }
+
+        private void DrawStatusBar()
+        {
+            if (string.IsNullOrEmpty(_statusMessage)) return;
+            EditorGUILayout.HelpBox(_statusMessage, MessageType.None);
+        }
+
+        private void DeleteConfig(int idx)
+        {
+            if (_settings == null || idx < 0 || idx >= _settings.syncConfigs.Count) return;
+            var config = _settings.syncConfigs[idx];
+            string name = string.IsNullOrEmpty(config.configName) ? $"Config {idx + 1}" : config.configName;
+            if (!EditorUtility.DisplayDialog("Config を削除",
+                $"「{name}」を削除しますか？\nこの操作は元に戻せます（Ctrl+Z）。", "削除", "キャンセル"))
+                return;
+
+            Undo.RecordObject(_settings, "Delete Config");
+            _settings.syncConfigs.RemoveAt(idx);
             EditorUtility.SetDirty(_settings);
+            _typesLists.Clear();
+
+            _configTreeView.Reload();
+            int next = Mathf.Clamp(idx - 1, 0, _settings.syncConfigs.Count - 1);
+            if (_settings.syncConfigs.Count > 0)
+                _configTreeView.SetSelection(new[] { next }, TreeViewSelectionOptions.RevealAndFrame);
+            else
+                _configTreeView.SetSelection(new List<int>());
         }
 
         private void ApplyConfigChange(SyncConfig config)
         {
-            MarkSettingsDirty();
+            EditorUtility.SetDirty(_settings);
             AssetSyncer.SyncConfig(config);
         }
 
         private static string NicifyTypeName(string assemblyQualifiedName)
         {
-            if (string.IsNullOrEmpty(assemblyQualifiedName))
-                return "(None)";
+            if (string.IsNullOrEmpty(assemblyQualifiedName)) return "(None)";
             int comma = assemblyQualifiedName.IndexOf(',');
             string fullName = comma >= 0 ? assemblyQualifiedName.Substring(0, comma).Trim() : assemblyQualifiedName;
             int dot = fullName.LastIndexOf('.');
