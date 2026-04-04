@@ -1,7 +1,7 @@
 {
 	"name": "com.nyoro_wrl.assetfork",
 	"displayName": "AssetFork",
-	"version": "1.0.0",
+	"version": "1.1.0",
 	"unity": "6000.0",
 	"license": "MIT",
 	"description": "Editor-only asset synchronization tool. Mirrors files from a source folder to a destination folder and supports type-based include/exclude filters.",

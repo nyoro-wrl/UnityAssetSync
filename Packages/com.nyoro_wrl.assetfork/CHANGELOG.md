@@ -6,12 +6,26 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-04-04
+
+### Added
+
+- Added config-owned path tracking with `ownedRelativePaths`.
+- Added manual protected asset list with `protectedGuids` (GUID-based).
+- Added conflict resolution dialog for existing destination unowned file collisions.
+- Added Protected list UI in the editor window with `Source`/`Destination`/`Invalid` states.
+
 ### Changed
 
+- Changed sync state model to derive `Unowned` as `!Owned && !Protected`.
+- Changed sync truth source to `SyncConfig` state only (Git-managed settings asset).
 - Allowed nested Source/Destination paths when `Include Subdirectories` is off.
 
 ### Fixed
 
+- Prevented automatic overwrite on destination existing unowned collisions.
+- Ensured protected destination files are excluded from copy/update/delete effects.
+- Ensured source-protected files behave the same as source type-excluded assets.
 - Kept nested path safety checks active when switching `Include Subdirectories` on.
 - Remapped config source/destination paths automatically when selected folders are moved.
 
