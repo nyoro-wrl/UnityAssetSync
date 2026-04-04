@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-04-04
+
+### Changed
+
+- Consolidated package code layout to Editor-only by moving config model classes from `Runtime` to `Editor`.
+- Removed the separate `Nyorowrl.AssetSync` runtime assembly and kept the package assembly structure Editor-only.
+
 ## [1.1.0] - 2026-04-04
 
 ### Added
