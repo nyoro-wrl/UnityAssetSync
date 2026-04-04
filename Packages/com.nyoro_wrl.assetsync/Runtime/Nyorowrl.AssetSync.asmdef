@@ -1,8 +1,0 @@
-{
-    "name": "Nyorowrl.AssetSync",
-    "references": [],
-    "includePlatforms": [
-        "Editor"
-    ],
-    "excludePlatforms": []
-}

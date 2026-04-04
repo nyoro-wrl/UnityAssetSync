@@ -1,8 +1,6 @@
 {
     "name": "Nyorowrl.AssetSync.Editor",
-    "references": [
-      "Nyorowrl.AssetSync"
-    ],
+    "references": [],
     "includePlatforms": [
         "Editor"
     ],
