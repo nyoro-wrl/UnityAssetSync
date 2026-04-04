@@ -196,6 +196,41 @@ namespace Nyorowrl.Assetfork.Editor.Tests
             Assert.IsFalse(DstExists("file.txt"));
         }
 
+        [Test]
+        public void SyncConfig_Disabled_RemovesOwnedFileFromDst()
+        {
+            WriteSrc("file.txt", "synced");
+            var config = MakeConfig();
+
+            AssetSyncer.SyncConfig(config);
+            Assert.IsTrue(DstExists("file.txt"));
+            Assert.IsTrue(OwnedContains(config, "file.txt"));
+
+            config.enabled = false;
+            AssetSyncer.SyncConfig(config);
+
+            Assert.IsFalse(DstExists("file.txt"));
+            Assert.IsFalse(OwnedContains(config, "file.txt"));
+        }
+
+        [Test]
+        public void SyncConfig_Disabled_KeepsManualDstFile()
+        {
+            WriteSrc("synced.txt", "from-src");
+            WriteDst("manual.txt", "manual");
+            var config = MakeConfig();
+
+            AssetSyncer.SyncConfig(config);
+            Assert.IsTrue(DstExists("synced.txt"));
+            Assert.IsTrue(DstExists("manual.txt"));
+
+            config.enabled = false;
+            AssetSyncer.SyncConfig(config);
+
+            Assert.IsFalse(DstExists("synced.txt"), "owned file should be removed when config is disabled");
+            Assert.IsTrue(DstExists("manual.txt"), "manual destination file must remain");
+        }
+
         // #20
         [Test]
         public void SyncConfig_EmptySourcePath_LogsWarning()
@@ -714,7 +749,7 @@ namespace Nyorowrl.Assetfork.Editor.Tests
 
         // #44
         [Test]
-        public void State_Normalize_RemovesDuplicates()
+        public void State_Normalize_NormalizesOwnedOnly()
         {
             var config = MakeConfig();
             config.ownedRelativePaths = new List<string> { "a.txt", "a.txt", "A.txt", "sub\\b.txt" };
@@ -726,7 +761,11 @@ namespace Nyorowrl.Assetfork.Editor.Tests
             Assert.AreEqual(2, config.ownedRelativePaths.Count);
             Assert.AreEqual("a.txt", config.ownedRelativePaths[0]);
             Assert.AreEqual("sub/b.txt", config.ownedRelativePaths[1]);
-            Assert.AreEqual(2, config.protectedGuids.Count);
+            Assert.AreEqual(4, config.protectedGuids.Count);
+            Assert.AreEqual("", config.protectedGuids[0]);
+            Assert.AreEqual("g1", config.protectedGuids[1]);
+            Assert.AreEqual("g1", config.protectedGuids[2]);
+            Assert.AreEqual("g2", config.protectedGuids[3]);
         }
 
         // 笏笏笏 Integration (#45窶・0) 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏

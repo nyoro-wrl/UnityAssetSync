@@ -79,10 +79,22 @@ namespace Nyorowrl.Assetfork.Editor
         internal static int SyncConfig(SyncConfig config, out bool stateChanged)
         {
             stateChanged = false;
-            if (!ValidateSyncConfig(config))
+            if (config == null)
                 return 0;
 
             stateChanged = NormalizeState(config);
+
+            if (!config.enabled)
+            {
+                RemoveOwnedFilesFromDestination(config, out bool disabledStateChanged, out bool disabledFileSystemChanged);
+                stateChanged |= disabledStateChanged;
+                if (disabledFileSystemChanged)
+                    AssetDatabase.Refresh();
+                return 0;
+            }
+
+            if (!ValidateSyncConfig(config))
+                return 0;
 
             string srcRoot = ToFullPath(config.sourcePath);
             string dstRoot = ToFullPath(config.destinationPath);
@@ -108,6 +120,44 @@ namespace Nyorowrl.Assetfork.Editor
                 AssetDatabase.Refresh();
 
             return copied;
+        }
+
+        private static void RemoveOwnedFilesFromDestination(
+            SyncConfig config,
+            out bool stateChanged,
+            out bool fileSystemChanged)
+        {
+            stateChanged = false;
+            fileSystemChanged = false;
+
+            if (config.ownedRelativePaths == null || config.ownedRelativePaths.Count == 0)
+                return;
+
+            if (string.IsNullOrEmpty(config.destinationPath))
+                return;
+
+            string dstRoot = ToFullPath(config.destinationPath);
+            var owned = new HashSet<string>(config.ownedRelativePaths, StringComparer.OrdinalIgnoreCase);
+            var sourceProtected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var destinationProtected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            BuildProtectedPathSets(config, sourceProtected, destinationProtected);
+
+            foreach (string rel in owned.ToList())
+            {
+                // Destination-protected assets are never deleted by sync operations.
+                if (!destinationProtected.Contains(rel))
+                {
+                    string relSystem = NormalizedRelativePathToSystemPath(rel);
+                    string dstFile = Path.Combine(dstRoot, relSystem);
+                    if (DeleteFileAndMeta(dstFile))
+                        fileSystemChanged = true;
+                }
+
+                owned.Remove(rel);
+                stateChanged = true;
+            }
+
+            stateChanged |= SetOwnedPaths(config, owned);
         }
 
         private static bool ValidateSyncConfig(SyncConfig config)
@@ -494,7 +544,12 @@ namespace Nyorowrl.Assetfork.Editor
                 return false;
 
             config.ownedRelativePaths ??= new List<string>();
-            config.protectedGuids ??= new List<string>();
+            bool protectedListInitialized = false;
+            if (config.protectedGuids == null)
+            {
+                config.protectedGuids = new List<string>();
+                protectedListInitialized = true;
+            }
 
             var normalizedOwned = config.ownedRelativePaths
                 .Where(p => !string.IsNullOrWhiteSpace(p))
@@ -504,18 +559,12 @@ namespace Nyorowrl.Assetfork.Editor
                 .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            var normalizedProtected = config.protectedGuids
-                .Where(g => !string.IsNullOrWhiteSpace(g))
-                .Distinct(StringComparer.Ordinal)
-                .ToList();
-
-            bool changed = !ListEquals(config.ownedRelativePaths, normalizedOwned, StringComparer.OrdinalIgnoreCase)
-                || !ListEquals(config.protectedGuids, normalizedProtected, StringComparer.Ordinal);
+            bool changed = protectedListInitialized
+                || !ListEquals(config.ownedRelativePaths, normalizedOwned, StringComparer.OrdinalIgnoreCase);
 
             if (changed)
             {
                 config.ownedRelativePaths = normalizedOwned;
-                config.protectedGuids = normalizedProtected;
             }
 
             return changed;
