@@ -65,18 +65,18 @@ namespace Nyorowrl.Assetfork.Editor.Tests
             AssetSyncer.SyncConfig(config);
             string dstFilePath = Path.Combine(_dstFullPath, relativePath);
             Assert.IsTrue(File.Exists(dstFilePath), "file should exist after initial sync");
-            Assert.Contains("file.txt", config.ownedRelativePaths);
+            Assert.Contains("file.txt", config.syncRelativePaths);
 
             string dstGuid = AssetDatabase.AssetPathToGUID(_dstAssetPath + "/" + relativePath);
             Assume.That(!string.IsNullOrEmpty(dstGuid), "destination guid must exist");
-            config.protectedGuids.Add(dstGuid);
+            config.ignoreGuids.Add(dstGuid);
 
             config.enabled = false;
             AssetSyncer.SyncConfig(config);
-            Assert.IsTrue(File.Exists(dstFilePath), "destination protected file should remain after disabling");
+            Assert.IsTrue(File.Exists(dstFilePath), "destination ignore file should remain after disabling");
 
-            config.protectedGuids.Remove(dstGuid);
-            Assert.IsTrue(config.ownedRelativePaths.Contains("file.txt"), "owned path should still exist before apply");
+            config.ignoreGuids.Remove(dstGuid);
+            Assert.IsTrue(config.syncRelativePaths.Contains("file.txt"), "synced path should still exist before apply");
 
             var settings = ScriptableObject.CreateInstance<AssetForkSettings>();
             settings.syncConfigs = new List<SyncConfig> { config };
@@ -91,7 +91,7 @@ namespace Nyorowrl.Assetfork.Editor.Tests
             applyConfigChangeMethod.Invoke(window, new object[] { config });
 
             Assert.IsTrue(File.Exists(dstFilePath), "disabled config change must not delete destination file");
-            Assert.IsFalse(config.ownedRelativePaths.Contains("file.txt"), "removing protection while disabled should drop ownership");
+            Assert.IsFalse(config.syncRelativePaths.Contains("file.txt"), "removing protection while disabled should drop ownership");
 
             int conflictDialogCalls = 0;
             AssetSyncer.ConflictResolverOverride = (SyncConfig _, IReadOnlyList<AssetSyncer.SyncConflict> conflicts, out Dictionary<string, AssetSyncer.ConflictResolution> decisions) =>
@@ -99,7 +99,7 @@ namespace Nyorowrl.Assetfork.Editor.Tests
                 conflictDialogCalls++;
                 decisions = new Dictionary<string, AssetSyncer.ConflictResolution>();
                 foreach (var conflict in conflicts)
-                    decisions[conflict.NormalizedRelativePath] = AssetSyncer.ConflictResolution.Protected;
+                    decisions[conflict.NormalizedRelativePath] = AssetSyncer.ConflictResolution.Ignore;
                 return true;
             };
 

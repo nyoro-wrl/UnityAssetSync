@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
@@ -38,7 +38,7 @@ namespace Nyorowrl.Assetfork.Editor.Tests
             {
                 decisions = new Dictionary<string, AssetSyncer.ConflictResolution>();
                 foreach (var conflict in conflicts)
-                    decisions[conflict.NormalizedRelativePath] = AssetSyncer.ConflictResolution.Protected;
+                    decisions[conflict.NormalizedRelativePath] = AssetSyncer.ConflictResolution.Ignore;
                 return true;
             };
         }
@@ -110,9 +110,9 @@ namespace Nyorowrl.Assetfork.Editor.Tests
             };
         }
 
-        private bool OwnedContains(SyncConfig config, string relPath)
+        private bool SyncContains(SyncConfig config, string relPath)
         {
-            return config.ownedRelativePaths.Contains(AssetSyncer.NormalizeRelativePath(relPath));
+            return config.syncRelativePaths.Contains(AssetSyncer.NormalizeRelativePath(relPath));
         }
 
         // 笏笏笏 ShouldCopy (#15窶・8) 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
@@ -197,20 +197,20 @@ namespace Nyorowrl.Assetfork.Editor.Tests
         }
 
         [Test]
-        public void SyncConfig_Disabled_RemovesOwnedFileFromDst()
+        public void SyncConfig_Disabled_RemovesSyncFileFromDst()
         {
             WriteSrc("file.txt", "synced");
             var config = MakeConfig();
 
             AssetSyncer.SyncConfig(config);
             Assert.IsTrue(DstExists("file.txt"));
-            Assert.IsTrue(OwnedContains(config, "file.txt"));
+            Assert.IsTrue(SyncContains(config, "file.txt"));
 
             config.enabled = false;
             AssetSyncer.SyncConfig(config);
 
             Assert.IsFalse(DstExists("file.txt"));
-            Assert.IsFalse(OwnedContains(config, "file.txt"));
+            Assert.IsFalse(SyncContains(config, "file.txt"));
         }
 
         [Test]
@@ -227,7 +227,7 @@ namespace Nyorowrl.Assetfork.Editor.Tests
             config.enabled = false;
             AssetSyncer.SyncConfig(config);
 
-            Assert.IsFalse(DstExists("synced.txt"), "owned file should be removed when config is disabled");
+            Assert.IsFalse(DstExists("synced.txt"), "synced file should be removed when config is disabled");
             Assert.IsTrue(DstExists("manual.txt"), "manual destination file must remain");
         }
 
@@ -529,23 +529,23 @@ namespace Nyorowrl.Assetfork.Editor.Tests
 
         // #31
         [Test]
-        public void Phase1_CopiedFile_AddedToOwned()
+        public void Phase1_CopiedFile_AddedToSync()
         {
             WriteSrc("file.txt");
             var config = MakeConfig();
             AssetSyncer.SyncConfig(config);
-            Assert.IsTrue(OwnedContains(config, "file.txt"));
+            Assert.IsTrue(SyncContains(config, "file.txt"));
         }
 
         // #32
         [Test]
-        public void Phase1_AlreadySynced_StillInOwned()
+        public void Phase1_AlreadySynced_StillInSync()
         {
             WriteSrc("file.txt");
             var config = MakeConfig();
             AssetSyncer.SyncConfig(config);
             AssetSyncer.SyncConfig(config);
-            Assert.IsTrue(OwnedContains(config, "file.txt"));
+            Assert.IsTrue(SyncContains(config, "file.txt"));
         }
 
         // 笏笏笏 Phase 2: 蜑企勁 (#33窶・1) 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
@@ -637,7 +637,7 @@ namespace Nyorowrl.Assetfork.Editor.Tests
             var config = MakeConfig();
             AssetSyncer.SyncConfig(config);
             Assert.IsTrue(DstExists("file.txt"));
-            Assert.IsTrue(OwnedContains(config, "file.txt"));
+            Assert.IsTrue(SyncContains(config, "file.txt"));
 
             var exclude = new FilterCondition
             {
@@ -647,7 +647,7 @@ namespace Nyorowrl.Assetfork.Editor.Tests
             config.filters = new List<FilterCondition> { exclude };
             AssetSyncer.SyncConfig(config);
             Assert.IsFalse(DstExists("file.txt"));
-            Assert.IsFalse(OwnedContains(config, "file.txt"));
+            Assert.IsFalse(SyncContains(config, "file.txt"));
         }
 
         // #39
@@ -696,34 +696,34 @@ namespace Nyorowrl.Assetfork.Editor.Tests
 
         // #41
         [Test]
-        public void Phase2_DeletedFile_RemovedFromOwned()
+        public void Phase2_DeletedFile_RemovedFromSync()
         {
             WriteSrc("file.txt");
             var config = MakeConfig();
             AssetSyncer.SyncConfig(config);
-            Assert.IsTrue(OwnedContains(config, "file.txt"));
+            Assert.IsTrue(SyncContains(config, "file.txt"));
 
             DeleteSrc("file.txt");
             AssetSyncer.SyncConfig(config);
-            Assert.IsFalse(OwnedContains(config, "file.txt"));
+            Assert.IsFalse(SyncContains(config, "file.txt"));
         }
 
         // 笏笏笏 繝槭ル繝輔ぉ繧ｹ繝・(#42窶・4) 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
 
         // #42
         [Test]
-        public void State_FirstSync_OwnedPathCreated()
+        public void State_FirstSync_SyncPathCreated()
         {
             WriteSrc("file.txt");
             var config = MakeConfig();
 
             AssetSyncer.SyncConfig(config);
-            Assert.IsTrue(OwnedContains(config, "file.txt"));
+            Assert.IsTrue(SyncContains(config, "file.txt"));
         }
 
         // #43
         [Test]
-        public void State_DifferentConfigs_KeepIndependentOwnedLists()
+        public void State_DifferentConfigs_KeepIndependentSyncLists()
         {
             string dst2AssetPath = _testRoot + "/Dst2";
             Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(Application.dataPath), dst2AssetPath));
@@ -743,29 +743,29 @@ namespace Nyorowrl.Assetfork.Editor.Tests
             AssetSyncer.SyncConfig(config1);
             AssetSyncer.SyncConfig(config2);
 
-            Assert.IsTrue(OwnedContains(config1, "file.txt"));
-            Assert.IsTrue(OwnedContains(config2, "file.txt"));
+            Assert.IsTrue(SyncContains(config1, "file.txt"));
+            Assert.IsTrue(SyncContains(config2, "file.txt"));
         }
 
         // #44
         [Test]
-        public void State_Normalize_NormalizesOwnedOnly()
+        public void State_Normalize_NormalizesSyncOnly()
         {
             var config = MakeConfig();
-            config.ownedRelativePaths = new List<string> { "a.txt", "a.txt", "A.txt", "sub\\b.txt" };
-            config.protectedGuids = new List<string> { "", "g1", "g1", "g2" };
+            config.syncRelativePaths = new List<string> { "a.txt", "a.txt", "A.txt", "sub\\b.txt" };
+            config.ignoreGuids = new List<string> { "", "g1", "g1", "g2" };
 
             bool changed = AssetSyncer.NormalizeState(config);
 
             Assert.IsTrue(changed);
-            Assert.AreEqual(2, config.ownedRelativePaths.Count);
-            Assert.AreEqual("a.txt", config.ownedRelativePaths[0]);
-            Assert.AreEqual("sub/b.txt", config.ownedRelativePaths[1]);
-            Assert.AreEqual(4, config.protectedGuids.Count);
-            Assert.AreEqual("", config.protectedGuids[0]);
-            Assert.AreEqual("g1", config.protectedGuids[1]);
-            Assert.AreEqual("g1", config.protectedGuids[2]);
-            Assert.AreEqual("g2", config.protectedGuids[3]);
+            Assert.AreEqual(2, config.syncRelativePaths.Count);
+            Assert.AreEqual("a.txt", config.syncRelativePaths[0]);
+            Assert.AreEqual("sub/b.txt", config.syncRelativePaths[1]);
+            Assert.AreEqual(4, config.ignoreGuids.Count);
+            Assert.AreEqual("", config.ignoreGuids[0]);
+            Assert.AreEqual("g1", config.ignoreGuids[1]);
+            Assert.AreEqual("g1", config.ignoreGuids[2]);
+            Assert.AreEqual("g2", config.ignoreGuids[3]);
         }
 
         // 笏笏笏 Integration (#45窶・0) 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
@@ -842,54 +842,54 @@ namespace Nyorowrl.Assetfork.Editor.Tests
         }
 
         [Test]
-        public void ProtectedDestination_RemoveProtection_ResumesSyncWithoutConflict()
+        public void IgnoreDestination_RemoveProtection_ResumesSyncWithoutConflict()
         {
             var config = MakeConfig();
             WriteSrc("file.txt", "v1");
             AssetSyncer.SyncConfig(config);
             Assert.AreEqual("v1", ReadDst("file.txt"));
-            Assert.IsTrue(OwnedContains(config, "file.txt"));
+            Assert.IsTrue(SyncContains(config, "file.txt"));
 
             AssetDatabase.Refresh();
             string dstAssetPath = _dstAssetPath + "/file.txt";
             string dstGuid = AssetDatabase.AssetPathToGUID(dstAssetPath);
             Assume.That(!string.IsNullOrEmpty(dstGuid), "destination GUID must be available");
 
-            config.protectedGuids.Add(dstGuid);
+            config.ignoreGuids.Add(dstGuid);
             WriteSrc("file.txt", "v2");
             AssetSyncer.SyncConfig(config);
-            Assert.AreEqual("v1", ReadDst("file.txt"), "destination protected file should not update");
-            Assert.IsTrue(OwnedContains(config, "file.txt"), "owned state should be retained while destination is protected");
+            Assert.AreEqual("v1", ReadDst("file.txt"), "destination ignore file should not update");
+            Assert.IsTrue(SyncContains(config, "file.txt"), "synced state should be retained while destination is ignore");
 
-            config.protectedGuids.Remove(dstGuid);
+            config.ignoreGuids.Remove(dstGuid);
             AssetSyncer.SyncConfig(config);
             Assert.AreEqual("v2", ReadDst("file.txt"), "sync should resume after removing destination protection");
         }
 
         [Test]
-        public void ProtectedDestination_RemoveProtection_AfterDisableEnable_ResumesSyncWithoutConflict()
+        public void IgnoreDestination_RemoveProtection_AfterDisableEnable_ResumesSyncWithoutConflict()
         {
             var config = MakeConfig();
             WriteSrc("file.txt", "v1");
             AssetSyncer.SyncConfig(config);
             Assert.AreEqual("v1", ReadDst("file.txt"));
-            Assert.IsTrue(OwnedContains(config, "file.txt"));
+            Assert.IsTrue(SyncContains(config, "file.txt"));
 
             AssetDatabase.Refresh();
             string dstAssetPath = _dstAssetPath + "/file.txt";
             string dstGuid = AssetDatabase.AssetPathToGUID(dstAssetPath);
             Assume.That(!string.IsNullOrEmpty(dstGuid), "destination GUID must be available");
 
-            config.protectedGuids.Add(dstGuid);
+            config.ignoreGuids.Add(dstGuid);
             WriteSrc("file.txt", "v2");
             AssetSyncer.SyncConfig(config);
-            Assert.AreEqual("v1", ReadDst("file.txt"), "destination protected file should not update");
-            Assert.IsTrue(OwnedContains(config, "file.txt"), "owned state should be retained while destination is protected");
+            Assert.AreEqual("v1", ReadDst("file.txt"), "destination ignore file should not update");
+            Assert.IsTrue(SyncContains(config, "file.txt"), "synced state should be retained while destination is ignore");
 
             config.enabled = false;
             AssetSyncer.SyncConfig(config);
-            Assert.IsTrue(DstExists("file.txt"), "destination protected file should remain when sync is disabled");
-            Assert.IsTrue(OwnedContains(config, "file.txt"), "owned state should be retained for destination protected files while disabled");
+            Assert.IsTrue(DstExists("file.txt"), "destination ignore file should remain when sync is disabled");
+            Assert.IsTrue(SyncContains(config, "file.txt"), "synced state should be retained for destination ignore files while disabled");
 
             config.enabled = true;
             AssetSyncer.SyncConfig(config);
@@ -900,61 +900,61 @@ namespace Nyorowrl.Assetfork.Editor.Tests
                 conflictDialogCalls++;
                 decisions = new Dictionary<string, AssetSyncer.ConflictResolution>();
                 foreach (var conflict in conflicts)
-                    decisions[conflict.NormalizedRelativePath] = AssetSyncer.ConflictResolution.Protected;
+                    decisions[conflict.NormalizedRelativePath] = AssetSyncer.ConflictResolution.Ignore;
                 return true;
             };
 
-            config.protectedGuids.Remove(dstGuid);
+            config.ignoreGuids.Remove(dstGuid);
             AssetSyncer.SyncConfig(config);
 
             Assert.AreEqual(0, conflictDialogCalls, "removing destination protection should not open conflicts dialog");
             Assert.AreEqual("v2", ReadDst("file.txt"), "sync should resume after removing destination protection");
-            Assert.IsTrue(OwnedContains(config, "file.txt"), "file should remain owned after protection is removed");
+            Assert.IsTrue(SyncContains(config, "file.txt"), "file should remain synced after protection is removed");
         }
 
         [Test]
-        public void PruneOwnedPathsForDisabledConfig_RemoveDestinationProtection_RemovesOwnedWithoutDeleting()
+        public void PruneSyncPathsForDisabledConfig_RemoveDestinationProtection_RemovesSyncWithoutDeleting()
         {
             var config = MakeConfig();
             WriteSrc("file.txt", "v1");
             AssetSyncer.SyncConfig(config);
             Assert.IsTrue(DstExists("file.txt"));
-            Assert.IsTrue(OwnedContains(config, "file.txt"));
+            Assert.IsTrue(SyncContains(config, "file.txt"));
 
             AssetDatabase.Refresh();
             string dstGuid = AssetDatabase.AssetPathToGUID(_dstAssetPath + "/file.txt");
             Assume.That(!string.IsNullOrEmpty(dstGuid), "destination guid must be available");
-            config.protectedGuids.Add(dstGuid);
+            config.ignoreGuids.Add(dstGuid);
 
             config.enabled = false;
             AssetSyncer.SyncConfig(config);
-            Assert.IsTrue(DstExists("file.txt"), "destination protected file should remain when disabled");
-            Assert.IsTrue(OwnedContains(config, "file.txt"), "owned should remain while destination is protected");
+            Assert.IsTrue(DstExists("file.txt"), "destination ignore file should remain when disabled");
+            Assert.IsTrue(SyncContains(config, "file.txt"), "synced should remain while destination is ignore");
 
-            config.protectedGuids.Remove(dstGuid);
-            bool changed = AssetSyncer.PruneOwnedPathsForDisabledConfig(config);
+            config.ignoreGuids.Remove(dstGuid);
+            bool changed = AssetSyncer.PruneSyncPathsForDisabledConfig(config);
 
-            Assert.IsTrue(changed, "removing destination protection while disabled should drop owned state");
+            Assert.IsTrue(changed, "removing destination protection while disabled should drop synced state");
             Assert.IsTrue(DstExists("file.txt"), "pruning ownership must not delete destination file");
-            Assert.IsFalse(OwnedContains(config, "file.txt"), "destination file should become unowned");
+            Assert.IsFalse(SyncContains(config, "file.txt"), "destination file should become unsynced");
         }
 
         [Test]
-        public void CollectSyncedDestinationOwnedRelativePaths_ExcludesDestinationProtected()
+        public void CollectSyncedDestinationSyncRelativePaths_ExcludesDestinationIgnore()
         {
             var config = MakeConfig();
-            WriteSrc("protected.txt", "p1");
+            WriteSrc("ignore.txt", "p1");
             WriteSrc("normal.txt", "n1");
             AssetSyncer.SyncConfig(config);
 
             AssetDatabase.Refresh();
-            string protectedGuid = AssetDatabase.AssetPathToGUID(_dstAssetPath + "/protected.txt");
-            Assume.That(!string.IsNullOrEmpty(protectedGuid), "destination protected asset guid must exist");
-            config.protectedGuids.Add(protectedGuid);
+            string ignoreGuid = AssetDatabase.AssetPathToGUID(_dstAssetPath + "/ignore.txt");
+            Assume.That(!string.IsNullOrEmpty(ignoreGuid), "destination ignore asset guid must exist");
+            config.ignoreGuids.Add(ignoreGuid);
 
-            HashSet<string> syncedOwned = AssetSyncer.CollectSyncedDestinationOwnedRelativePaths(config);
-            Assert.IsFalse(syncedOwned.Contains("protected.txt"));
-            Assert.IsTrue(syncedOwned.Contains("normal.txt"));
+            HashSet<string> syncedSync = AssetSyncer.CollectSyncedDestinationSyncRelativePaths(config);
+            Assert.IsFalse(syncedSync.Contains("ignore.txt"));
+            Assert.IsTrue(syncedSync.Contains("normal.txt"));
         }
 
         [Test]

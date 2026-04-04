@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
@@ -24,7 +24,7 @@ namespace Nyorowrl.Assetfork.Editor
 
         private readonly Dictionary<FilterCondition, ReorderableList> _typesLists =
             new Dictionary<FilterCondition, ReorderableList>();
-        private readonly Dictionary<SyncConfig, ReorderableList> _protectedLists =
+        private readonly Dictionary<SyncConfig, ReorderableList> _ignoreLists =
             new Dictionary<SyncConfig, ReorderableList>();
 
         private int SelectedConfigIndex => _configTreeView?.SelectedIndex ?? -1;
@@ -102,7 +102,7 @@ namespace Nyorowrl.Assetfork.Editor
                 if (EditorGUI.EndChangeCheck())
                 {
                     _typesLists.Clear();
-                    _protectedLists.Clear();
+                    _ignoreLists.Clear();
                     string path = _settings != null ? AssetDatabase.GetAssetPath(_settings) : "";
                     EditorPrefs.SetString(SettingsPathPrefKey, path);
                     RebuildTreeView();
@@ -123,7 +123,7 @@ namespace Nyorowrl.Assetfork.Editor
                         AssetDatabase.SaveAssets();
                         _settings = newSettings;
                         _typesLists.Clear();
-                        _protectedLists.Clear();
+                        _ignoreLists.Clear();
                         EditorPrefs.SetString(SettingsPathPrefKey, path);
                         RebuildTreeView();
                     }
@@ -267,7 +267,7 @@ namespace Nyorowrl.Assetfork.Editor
                 EditorGUILayout.Space();
                 DrawFilterList(config);
                 EditorGUILayout.Space();
-                DrawProtectedList(config);
+                DrawIgnoreList(config);
             }
         }
 
@@ -375,10 +375,10 @@ namespace Nyorowrl.Assetfork.Editor
             }
         }
 
-        private void DrawProtectedList(SyncConfig config)
+        private void DrawIgnoreList(SyncConfig config)
         {
-            config.protectedGuids ??= new List<string>();
-            GetOrCreateProtectedList(config).DoLayoutList();
+            config.ignoreGuids ??= new List<string>();
+            GetOrCreateIgnoreList(config).DoLayoutList();
         }
 
         private ReorderableList GetOrCreateTypesList(FilterCondition filter, SyncConfig config)
@@ -433,25 +433,25 @@ namespace Nyorowrl.Assetfork.Editor
             return list;
         }
 
-        private ReorderableList GetOrCreateProtectedList(SyncConfig config)
+        private ReorderableList GetOrCreateIgnoreList(SyncConfig config)
         {
-            if (_protectedLists.TryGetValue(config, out var existing))
+            if (_ignoreLists.TryGetValue(config, out var existing))
                 return existing;
 
-            config.protectedGuids ??= new List<string>();
+            config.ignoreGuids ??= new List<string>();
 
-            var list = new ReorderableList(config.protectedGuids, typeof(string),
+            var list = new ReorderableList(config.ignoreGuids, typeof(string),
                 draggable: true, displayHeader: true, displayAddButton: true, displayRemoveButton: true);
 
-            list.drawHeaderCallback = rect => EditorGUI.LabelField(rect, "Protected Assets");
+            list.drawHeaderCallback = rect => EditorGUI.LabelField(rect, "Ignore Assets");
             list.elementHeight = EditorGUIUtility.singleLineHeight + 2;
 
             list.drawElementCallback = (rect, index, isActive, isFocused) =>
             {
-                if (index < 0 || index >= config.protectedGuids.Count)
+                if (index < 0 || index >= config.ignoreGuids.Count)
                     return;
 
-                string guid = config.protectedGuids[index];
+                string guid = config.ignoreGuids[index];
                 string path = AssetDatabase.GUIDToAssetPath(guid);
                 UnityEngine.Object current = string.IsNullOrEmpty(path)
                     ? null
@@ -462,9 +462,9 @@ namespace Nyorowrl.Assetfork.Editor
                 var next = EditorGUI.ObjectField(fieldRect, $"Element {index}", current, typeof(UnityEngine.Object), false);
                 if (EditorGUI.EndChangeCheck())
                 {
-                    Undo.RecordObject(_settings, "Change Protected Asset");
+                    Undo.RecordObject(_settings, "Change Ignore Asset");
                     string nextPath = AssetDatabase.GetAssetPath(next);
-                    config.protectedGuids[index] = string.IsNullOrEmpty(nextPath)
+                    config.ignoreGuids[index] = string.IsNullOrEmpty(nextPath)
                         ? string.Empty
                         : AssetDatabase.AssetPathToGUID(nextPath);
                     ApplyConfigChange(config);
@@ -473,22 +473,22 @@ namespace Nyorowrl.Assetfork.Editor
 
             list.onAddCallback = _ =>
             {
-                Undo.RecordObject(_settings, "Add Protected Asset");
-                config.protectedGuids.Add(string.Empty);
+                Undo.RecordObject(_settings, "Add Ignore Asset");
+                config.ignoreGuids.Add(string.Empty);
                 ApplyConfigChange(config);
             };
 
             list.onRemoveCallback = _ =>
             {
-                if (list.index < 0 || list.index >= config.protectedGuids.Count)
+                if (list.index < 0 || list.index >= config.ignoreGuids.Count)
                     return;
 
-                Undo.RecordObject(_settings, "Delete Protected Asset");
-                config.protectedGuids.RemoveAt(list.index);
+                Undo.RecordObject(_settings, "Delete Ignore Asset");
+                config.ignoreGuids.RemoveAt(list.index);
                 ApplyConfigChange(config);
             };
 
-            _protectedLists[config] = list;
+            _ignoreLists[config] = list;
             return list;
         }
 
@@ -500,7 +500,7 @@ namespace Nyorowrl.Assetfork.Editor
             _settings.syncConfigs.RemoveAt(idx);
             EditorUtility.SetDirty(_settings);
             _typesLists.Clear();
-            _protectedLists.Clear();
+            _ignoreLists.Clear();
 
             _configTreeView.Reload();
             int next = Mathf.Clamp(idx - 1, 0, _settings.syncConfigs.Count - 1);
@@ -515,7 +515,7 @@ namespace Nyorowrl.Assetfork.Editor
             EditorUtility.SetDirty(_settings);
             if (!config.enabled)
             {
-                AssetSyncer.PruneOwnedPathsForDisabledConfig(config);
+                AssetSyncer.PruneSyncPathsForDisabledConfig(config);
                 return;
             }
             if (string.IsNullOrEmpty(config.sourcePath) || string.IsNullOrEmpty(config.destinationPath))
@@ -561,8 +561,8 @@ namespace Nyorowrl.Assetfork.Editor
         private static void EnsureConfigCollections(SyncConfig config)
         {
             config.filters ??= new List<FilterCondition>();
-            config.protectedGuids ??= new List<string>();
-            config.ownedRelativePaths ??= new List<string>();
+            config.ignoreGuids ??= new List<string>();
+            config.syncRelativePaths ??= new List<string>();
         }
 
         private void EnqueueDeferredSync(Action syncAction)

@@ -1,4 +1,4 @@
-﻿# Changelog
+# Changelog
 All notable changes to this package will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
@@ -10,22 +10,22 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Added
 
-- Added config-owned path tracking with `ownedRelativePaths`.
-- Added manual protected asset list with `protectedGuids` (GUID-based).
-- Added conflict resolution dialog for existing destination unowned file collisions.
-- Added Protected list UI in the editor window with `Source`/`Destination`/`Invalid` states.
+- Added config-synced path tracking with `syncRelativePaths`.
+- Added manual ignore asset list with `ignoreGuids` (GUID-based).
+- Added conflict resolution dialog for existing destination unsynced file collisions.
+- Added Ignore list UI in the editor window with `Source`/`Destination`/`Invalid` states.
 
 ### Changed
 
-- Changed sync state model to derive `Unowned` as `!Owned && !Protected`.
+- Changed sync state model to derive `Unsynced` as `!Sync && !Ignore`.
 - Changed sync truth source to `SyncConfig` state only (Git-managed settings asset).
 - Allowed nested Source/Destination paths when `Include Subdirectories` is off.
 
 ### Fixed
 
-- Prevented automatic overwrite on destination existing unowned collisions.
-- Ensured protected destination files are excluded from copy/update/delete effects.
-- Ensured source-protected files behave the same as source type-excluded assets.
+- Prevented automatic overwrite on destination existing unsynced collisions.
+- Ensured ignore destination files are excluded from copy/update/delete effects.
+- Ensured source-ignore files behave the same as source type-excluded assets.
 - Kept nested path safety checks active when switching `Include Subdirectories` on.
 - Remapped config source/destination paths automatically when selected folders are moved.
 

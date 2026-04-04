@@ -73,11 +73,11 @@ namespace Nyorowrl.Assetfork.Editor
                         continue;
 
                     string destinationRoot = NormalizeAssetPath(config.destinationPath);
-                    if (string.IsNullOrEmpty(destinationRoot) || config.ownedRelativePaths == null)
+                    if (string.IsNullOrEmpty(destinationRoot) || config.syncRelativePaths == null)
                         continue;
 
-                    HashSet<string> syncedOwnedRelativePaths = AssetSyncer.CollectSyncedDestinationOwnedRelativePaths(config);
-                    foreach (string normalizedRelativePath in syncedOwnedRelativePaths)
+                    HashSet<string> syncedSyncRelativePaths = AssetSyncer.CollectSyncedDestinationSyncRelativePaths(config);
+                    foreach (string normalizedRelativePath in syncedSyncRelativePaths)
                     {
                         SyncedAssetPaths.Add(destinationRoot + "/" + normalizedRelativePath);
                     }

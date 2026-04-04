@@ -41,19 +41,19 @@ namespace Nyorowrl.Assetfork.Editor.Tests
         }
 
         [Test]
-        public void RebuildSyncedPathCache_DestinationProtectedOwnedFile_DoesNotShowBadge()
+        public void RebuildSyncedPathCache_DestinationIgnoreSyncFile_DoesNotShowBadge()
         {
             string projectRoot = Path.GetDirectoryName(Application.dataPath);
-            string protectedRelativePath = "protected.txt";
+            string ignoreRelativePath = "ignore.txt";
             string normalRelativePath = "normal.txt";
 
-            File.WriteAllText(Path.Combine(projectRoot, _dstAssetPath, protectedRelativePath), "protected");
+            File.WriteAllText(Path.Combine(projectRoot, _dstAssetPath, ignoreRelativePath), "ignore");
             File.WriteAllText(Path.Combine(projectRoot, _srcAssetPath, normalRelativePath), "normal");
             AssetDatabase.Refresh();
 
-            string protectedDestinationAssetPath = _dstAssetPath + "/" + protectedRelativePath;
-            string protectedGuid = AssetDatabase.AssetPathToGUID(protectedDestinationAssetPath);
-            Assume.That(!string.IsNullOrEmpty(protectedGuid), "destination protected asset guid must exist");
+            string ignoreDestinationAssetPath = _dstAssetPath + "/" + ignoreRelativePath;
+            string ignoreGuid = AssetDatabase.AssetPathToGUID(ignoreDestinationAssetPath);
+            Assume.That(!string.IsNullOrEmpty(ignoreGuid), "destination ignore asset guid must exist");
 
             var settings = ScriptableObject.CreateInstance<AssetForkSettings>();
             settings.syncConfigs = new List<SyncConfig>
@@ -64,8 +64,8 @@ namespace Nyorowrl.Assetfork.Editor.Tests
                     enabled = true,
                     sourcePath = _srcAssetPath,
                     destinationPath = _dstAssetPath,
-                    ownedRelativePaths = new List<string> { protectedRelativePath, normalRelativePath },
-                    protectedGuids = new List<string> { protectedGuid }
+                    syncRelativePaths = new List<string> { ignoreRelativePath, normalRelativePath },
+                    ignoreGuids = new List<string> { ignoreGuid }
                 }
             };
 
@@ -87,11 +87,11 @@ namespace Nyorowrl.Assetfork.Editor.Tests
             Assert.IsNotNull(syncedPaths, "SyncedAssetPaths must be a HashSet<string>");
 
             string destinationRoot = _dstAssetPath;
-            string protectedFullPath = destinationRoot + "/" + protectedRelativePath;
+            string ignoreFullPath = destinationRoot + "/" + ignoreRelativePath;
             string normalFullPath = destinationRoot + "/" + normalRelativePath;
 
-            Assert.IsFalse(syncedPaths.Contains(protectedFullPath), "destination-protected owned path should not show synced badge");
-            Assert.IsTrue(syncedPaths.Contains(normalFullPath), "non-protected owned path should still show synced badge");
+            Assert.IsFalse(syncedPaths.Contains(ignoreFullPath), "destination-ignore synced path should not show synced badge");
+            Assert.IsTrue(syncedPaths.Contains(normalFullPath), "non-ignore synced path should still show synced badge");
         }
 
         [Test]
@@ -112,8 +112,8 @@ namespace Nyorowrl.Assetfork.Editor.Tests
                     enabled = false,
                     sourcePath = _srcAssetPath,
                     destinationPath = _dstAssetPath,
-                    ownedRelativePaths = new List<string> { relativePath },
-                    protectedGuids = new List<string>()
+                    syncRelativePaths = new List<string> { relativePath },
+                    ignoreGuids = new List<string>()
                 }
             };
 

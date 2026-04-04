@@ -80,7 +80,7 @@ namespace Nyorowrl.Assetfork.Editor
                 _rows.Add(new ConflictRow
                 {
                     Conflict = conflict,
-                    Resolution = AssetSyncer.ConflictResolution.Protected
+                    Resolution = AssetSyncer.ConflictResolution.Ignore
                 });
             }
         }
@@ -207,11 +207,11 @@ namespace Nyorowrl.Assetfork.Editor
             using (new EditorGUILayout.HorizontalScope())
             {
                 EditorGUILayout.LabelField("Action", GUILayout.Width(120f));
-                int selected = row.Resolution == AssetSyncer.ConflictResolution.Owned ? 0 : 1;
+                int selected = row.Resolution == AssetSyncer.ConflictResolution.Sync ? 0 : 1;
                 selected = GUILayout.Toolbar(selected, ActionLabels, GUILayout.Width(ActionSegmentWidth));
                 row.Resolution = selected == 0
-                    ? AssetSyncer.ConflictResolution.Owned
-                    : AssetSyncer.ConflictResolution.Protected;
+                    ? AssetSyncer.ConflictResolution.Sync
+                    : AssetSyncer.ConflictResolution.Ignore;
             }
         }
 
