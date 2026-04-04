@@ -15,7 +15,6 @@ namespace Nyorowrl.Assetfork.Editor
         private Vector2 _detailScrollPosition;
         private float _listPanelWidth = 150f;
         private bool _isResizing;
-        private string _statusMessage = "";
 
         [SerializeField] private TreeViewState<int> _treeViewState;
         private ConfigTreeView _configTreeView;
@@ -86,8 +85,6 @@ namespace Nyorowrl.Assetfork.Editor
             DrawResizeHandle();
             DrawConfigDetail();
             EditorGUILayout.EndHorizontal();
-
-            DrawStatusBar();
         }
 
         private void DrawSettingsField()
@@ -144,16 +141,6 @@ namespace Nyorowrl.Assetfork.Editor
                 int newIndex = _settings.syncConfigs.Count - 1;
                 _configTreeView.Reload();
                 _configTreeView.SelectAndBeginRename(newIndex);
-            }
-
-            GUILayout.FlexibleSpace();
-
-            var syncIcon = EditorGUIUtility.IconContent("d_Refresh");
-            syncIcon.tooltip = "Sync All";
-            if (GUILayout.Button(syncIcon, EditorStyles.toolbarButton, GUILayout.Width(28)))
-            {
-                int count = AssetSyncer.SyncAll(_settings);
-                _statusMessage = $"Sync All: copied {count} files ({System.DateTime.Now:HH:mm:ss})";
             }
 
             EditorGUILayout.EndHorizontal();
@@ -397,12 +384,6 @@ namespace Nyorowrl.Assetfork.Editor
 
             _typesLists[filter] = list;
             return list;
-        }
-
-        private void DrawStatusBar()
-        {
-            if (string.IsNullOrEmpty(_statusMessage)) return;
-            EditorGUILayout.HelpBox(_statusMessage, MessageType.None);
         }
 
         private void DeleteConfig(int idx)

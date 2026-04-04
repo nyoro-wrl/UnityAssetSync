@@ -653,55 +653,5 @@ namespace Nyorowrl.Assetfork.Editor.Tests
             Assert.IsTrue(DstExists("manual.txt"), "manually placed dst file must not be deleted");
         }
 
-        // #49
-        [Test]
-        public void Integration_SyncAll_MultipleConfigs()
-        {
-            string src2AssetPath = _testRoot + "/Src2";
-            string dst2AssetPath = _testRoot + "/Dst2";
-            string projectRoot = Path.GetDirectoryName(Application.dataPath);
-            string src2FullPath = Path.GetFullPath(Path.Combine(projectRoot, src2AssetPath));
-            string dst2FullPath = Path.GetFullPath(Path.Combine(projectRoot, dst2AssetPath));
-            Directory.CreateDirectory(src2FullPath);
-            Directory.CreateDirectory(dst2FullPath);
-
-            string manifest2 = ManifestFilePath(dst2AssetPath);
-
-            WriteSrc("a.txt");
-            File.WriteAllText(Path.Combine(src2FullPath, "b.txt"), "b");
-
-            var settings = ScriptableObject.CreateInstance<AssetForkSettings>();
-            settings.syncConfigs.Add(MakeConfig());
-            settings.syncConfigs.Add(new SyncConfig
-            {
-                configName = "Config2",
-                enabled = true,
-                sourcePath = src2AssetPath,
-                destinationPath = dst2AssetPath,
-                filters = new List<FilterCondition>()
-            });
-
-            AssetSyncer.SyncAll(settings);
-
-            Assert.IsTrue(DstExists("a.txt"), "first config must sync");
-            Assert.IsTrue(File.Exists(Path.Combine(dst2FullPath, "b.txt")), "second config must sync");
-
-            if (File.Exists(manifest2)) File.Delete(manifest2);
-        }
-
-        // #50
-        [Test]
-        public void Integration_SyncAll_SkipsDisabled()
-        {
-            WriteSrc("a.txt");
-
-            var settings = ScriptableObject.CreateInstance<AssetForkSettings>();
-            var config = MakeConfig();
-            config.enabled = false;
-            settings.syncConfigs.Add(config);
-
-            AssetSyncer.SyncAll(settings);
-            Assert.IsFalse(DstExists("a.txt"), "disabled config must be skipped");
-        }
     }
 }

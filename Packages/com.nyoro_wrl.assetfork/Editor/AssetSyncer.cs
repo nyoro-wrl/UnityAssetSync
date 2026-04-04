@@ -21,14 +21,6 @@ namespace Nyorowrl.Assetfork.Editor
             public List<string> files = new List<string>();
         }
 
-        public static int SyncAll(AssetForkSettings settings)
-        {
-            int total = 0;
-            foreach (var config in settings.syncConfigs)
-                total += SyncConfig(config);
-            return total;
-        }
-
         public static int SyncConfig(SyncConfig config)
         {
             if (!config.enabled)
