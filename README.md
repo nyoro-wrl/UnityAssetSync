@@ -11,5 +11,5 @@
 Unity Package Manager の `Add package from git URL...` に、次の URL をそのまま入力してください。
 
 ```text
-https://https://github.com/nyoro-wrl/Unity-AssetFork.git?path=/Packages/com.nyoro_wrl.assetfork
+https://github.com/nyoro-wrl/Unity-AssetFork.git?path=/Packages/com.nyoro_wrl.assetfork
 ```
