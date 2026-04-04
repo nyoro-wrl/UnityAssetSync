@@ -1,7 +1,7 @@
 {
-    "name": "Nyorowrl.Assetfork.Editor",
+    "name": "Nyorowrl.AssetSync.Editor",
     "references": [
-      "Nyorowrl.Assetfork"
+      "Nyorowrl.AssetSync"
     ],
     "includePlatforms": [
         "Editor"

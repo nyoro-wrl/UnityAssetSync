@@ -1,8 +1,8 @@
 {
-    "name": "Nyorowrl.Assetfork.Editor.Tests",
+    "name": "Nyorowrl.AssetSync.Editor.Tests",
     "references": [
-        "Nyorowrl.Assetfork.Editor",
-        "Nyorowrl.Assetfork"
+        "Nyorowrl.AssetSync.Editor",
+        "Nyorowrl.AssetSync"
     ],
     "optionalUnityReferences": [
         "TestAssemblies"

@@ -5,7 +5,7 @@ using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEngine;
 
-namespace Nyorowrl.Assetfork.Editor
+namespace Nyorowrl.AssetSync.Editor
 {
     internal class TypeSelectorDropdown : AdvancedDropdown
     {

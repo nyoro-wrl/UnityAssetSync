@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace Nyorowrl.Assetfork
+namespace Nyorowrl.AssetSync
 {
     [System.Serializable]
     public class FilterCondition

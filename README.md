@@ -1,4 +1,4 @@
-# Unity Asset Fork
+# Unity Asset Sync
 
 フォルダから別のフォルダへアセットを一方向に同期するEditor専用パッケージです。
 
@@ -11,5 +11,5 @@
 Unity Package Manager の `Add package from git URL...` に、次の URL をそのまま入力してください。
 
 ```text
-https://github.com/nyoro-wrl/Unity-AssetFork.git?path=/Packages/com.nyoro_wrl.assetfork
+https://github.com/nyoro-wrl/Unity-AssetSync.git?path=/Packages/com.nyoro_wrl.assetsync
 ```

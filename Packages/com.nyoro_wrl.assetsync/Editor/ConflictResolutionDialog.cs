@@ -1,9 +1,9 @@
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
-using Nyorowrl.Assetfork;
+using Nyorowrl.AssetSync;
 
-namespace Nyorowrl.Assetfork.Editor
+namespace Nyorowrl.AssetSync.Editor
 {
     internal sealed class ConflictResolutionDialog : EditorWindow
     {
@@ -61,7 +61,7 @@ namespace Nyorowrl.Assetfork.Editor
 
         private void Initialize(SyncConfig config, IReadOnlyList<AssetSyncer.SyncConflict> conflicts)
         {
-            titleContent = new GUIContent("AssetFork Conflicts");
+            titleContent = new GUIContent("AssetSync Conflicts");
             float targetHeight = ComputeWindowHeight(conflicts?.Count ?? 0);
             minSize = new Vector2(760f, MinWindowHeight);
             maxSize = new Vector2(10000f, 10000f);

@@ -6,11 +6,11 @@ using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using UnityEditor;
 using UnityEngine;
-using Nyorowrl.Assetfork;
+using Nyorowrl.AssetSync;
 
-[assembly: InternalsVisibleTo("Nyorowrl.Assetfork.Editor.Tests")]
+[assembly: InternalsVisibleTo("Nyorowrl.AssetSync.Editor.Tests")]
 
-namespace Nyorowrl.Assetfork.Editor
+namespace Nyorowrl.AssetSync.Editor
 {
     public static class AssetSyncer
     {
@@ -80,11 +80,11 @@ namespace Nyorowrl.Assetfork.Editor
             if (!stateChanged)
                 return;
 
-            string[] settingsGuids = AssetDatabase.FindAssets("t:AssetForkSettings");
+            string[] settingsGuids = AssetDatabase.FindAssets("t:AssetSyncSettings");
             foreach (string settingsGuid in settingsGuids)
             {
                 string settingsPath = AssetDatabase.GUIDToAssetPath(settingsGuid);
-                var settings = AssetDatabase.LoadAssetAtPath<AssetForkSettings>(settingsPath);
+                var settings = AssetDatabase.LoadAssetAtPath<AssetSyncSettings>(settingsPath);
                 if (settings?.syncConfigs == null)
                     continue;
                 if (!settings.syncConfigs.Contains(config))
@@ -218,13 +218,13 @@ namespace Nyorowrl.Assetfork.Editor
 
             if (string.IsNullOrEmpty(srcAssetPath) || string.IsNullOrEmpty(dstAssetPath))
             {
-                Debug.LogWarning($"[AssetFork] '{config.configName}': Source or Destination is not set.");
+                Debug.LogWarning($"[AssetSync] '{config.configName}': Source or Destination is not set.");
                 return false;
             }
 
             if (TryGetConfigWarning(config, out string warning))
             {
-                Debug.LogWarning($"[AssetFork] '{config.configName}': {warning}");
+                Debug.LogWarning($"[AssetSync] '{config.configName}': {warning}");
                 return false;
             }
 
@@ -255,7 +255,7 @@ namespace Nyorowrl.Assetfork.Editor
                 resolutionIterations++;
                 if (resolutionIterations > 8)
                 {
-                    Debug.LogWarning($"[AssetFork] '{config.configName}': Conflict resolution reached maximum retries. Sync cancelled.");
+                    Debug.LogWarning($"[AssetSync] '{config.configName}': Conflict resolution reached maximum retries. Sync cancelled.");
                     stateChanged |= SetSyncPaths(config, synced);
                     return copiedCount;
                 }
@@ -301,7 +301,7 @@ namespace Nyorowrl.Assetfork.Editor
                 {
                     if (!decisions.TryGetValue(conflict.NormalizedRelativePath, out var decision))
                     {
-                        Debug.LogWarning($"[AssetFork] '{config.configName}': Unresolved conflict for '{conflict.NormalizedRelativePath}'.");
+                        Debug.LogWarning($"[AssetSync] '{config.configName}': Unresolved conflict for '{conflict.NormalizedRelativePath}'.");
                         continue;
                     }
 
@@ -315,7 +315,7 @@ namespace Nyorowrl.Assetfork.Editor
 
                     if (!TryAddDestinationIgnoreGuid(config, conflict.DestinationAssetPath, out string ignoreGuid))
                     {
-                        Debug.LogWarning($"[AssetFork] '{config.configName}': Failed to protect '{conflict.DestinationAssetPath}' because GUID could not be resolved.");
+                        Debug.LogWarning($"[AssetSync] '{config.configName}': Failed to protect '{conflict.DestinationAssetPath}' because GUID could not be resolved.");
                         continue;
                     }
 
@@ -532,14 +532,14 @@ namespace Nyorowrl.Assetfork.Editor
                 return IgnoreEntryState.Invalid;
 
             if (!string.IsNullOrEmpty(destinationAssetRoot)
-                && AssetForkPostprocessor.IsAssetPathWithinRoot(assetPath, destinationAssetRoot))
+                && AssetSyncPostprocessor.IsAssetPathWithinRoot(assetPath, destinationAssetRoot))
             {
                 normalizedRelativePath = NormalizeRelativePath(GetRelativeAssetPath(assetPath, destinationAssetRoot));
                 return IgnoreEntryState.Destination;
             }
 
             if (!string.IsNullOrEmpty(sourceAssetRoot)
-                && AssetForkPostprocessor.IsAssetPathWithinRoot(assetPath, sourceAssetRoot))
+                && AssetSyncPostprocessor.IsAssetPathWithinRoot(assetPath, sourceAssetRoot))
             {
                 normalizedRelativePath = NormalizeRelativePath(GetRelativeAssetPath(assetPath, sourceAssetRoot));
                 return IgnoreEntryState.Source;
@@ -869,7 +869,7 @@ namespace Nyorowrl.Assetfork.Editor
         }
     }
 
-    public class AssetForkPostprocessor : AssetPostprocessor
+    public class AssetSyncPostprocessor : AssetPostprocessor
     {
         static void OnPostprocessAllAssets(
             string[] importedAssets,
@@ -877,11 +877,11 @@ namespace Nyorowrl.Assetfork.Editor
             string[] movedAssets,
             string[] movedFromAssetPaths)
         {
-            string[] guids = AssetDatabase.FindAssets("t:AssetForkSettings");
+            string[] guids = AssetDatabase.FindAssets("t:AssetSyncSettings");
             foreach (string guid in guids)
             {
                 string assetPath = AssetDatabase.GUIDToAssetPath(guid);
-                var settings = AssetDatabase.LoadAssetAtPath<AssetForkSettings>(assetPath);
+                var settings = AssetDatabase.LoadAssetAtPath<AssetSyncSettings>(assetPath);
                 if (settings == null)
                     continue;
 

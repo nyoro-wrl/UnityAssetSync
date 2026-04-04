@@ -1,13 +1,13 @@
-# AssetFork
+# AssetSync
 
-AssetFork is an editor-only Unity package for synchronizing assets between folders in a project.
+AssetSync is an editor-only Unity package for synchronizing assets between folders in a project.
 
 ## Features
 
 - Synchronize files from a source folder to a destination folder.
 - Copy only changed files (content hash based).
 - Track synced files per config in `SyncConfig.syncRelativePaths` (settings asset).
-- Keep destination files that are not managed by AssetFork unless explicitly resolved.
+- Keep destination files that are not managed by AssetSync unless explicitly resolved.
 - Protect assets manually with a GUID-based `Ignore` list (`ignoreGuids`).
 - Resolve destination collisions with a conflict dialog (`Overwrite` or `Keep`).
 - Show synced destination assets with an icon badge in the Project window.
@@ -15,8 +15,8 @@ AssetFork is an editor-only Unity package for synchronizing assets between folde
 
 ## Usage
 
-1. Open `Window > AssetFork`.
-2. Create or assign an `AssetForkSettings` asset.
+1. Open `Window > AssetSync`.
+2. Create or assign an `AssetSyncSettings` asset.
 3. Add a config and set `Source` and `Destination`.
 4. Set `Include Subdirectories` to control whether nested folders are synchronized (default: off).
    - When this is `off`, `Source` and `Destination` are allowed to be nested.
