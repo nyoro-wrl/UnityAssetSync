@@ -11,5 +11,5 @@
 Package Manager の `Add package from git URL...` に、次の URL をそのまま入力してください。
 
 ```text
-https://github.com/nyoro-wrl/Unity-AssetSync.git?path=/Packages/com.nyoro_wrl.assetsync
+https://github.com/nyoro-wrl/UnityAssetSync.git?path=/Packages/com.nyoro_wrl.assetsync
 ```
