@@ -71,6 +71,30 @@ namespace Nyorowrl.Assetfork.Editor
 
         internal static ConflictResolverDelegate ConflictResolverOverride;
 
+        internal static void ResumeSyncAfterConflictDialog(SyncConfig config)
+        {
+            if (config == null)
+                return;
+
+            SyncConfig(config, out bool stateChanged);
+            if (!stateChanged)
+                return;
+
+            string[] settingsGuids = AssetDatabase.FindAssets("t:AssetForkSettings");
+            foreach (string settingsGuid in settingsGuids)
+            {
+                string settingsPath = AssetDatabase.GUIDToAssetPath(settingsGuid);
+                var settings = AssetDatabase.LoadAssetAtPath<AssetForkSettings>(settingsPath);
+                if (settings?.syncConfigs == null)
+                    continue;
+                if (!settings.syncConfigs.Contains(config))
+                    continue;
+
+                EditorUtility.SetDirty(settings);
+                break;
+            }
+        }
+
         public static int SyncConfig(SyncConfig config)
         {
             return SyncConfig(config, out _);
