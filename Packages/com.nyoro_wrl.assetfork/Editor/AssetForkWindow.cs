@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
+using System;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEditorInternal;
@@ -15,12 +16,16 @@ namespace Nyorowrl.Assetfork.Editor
         private Vector2 _detailScrollPosition;
         private float _listPanelWidth = 150f;
         private bool _isResizing;
+        private readonly Queue<Action> _deferredSyncActions = new Queue<Action>();
+        private bool _deferredSyncScheduled;
 
         [SerializeField] private TreeViewState<int> _treeViewState;
         private ConfigTreeView _configTreeView;
 
         private readonly Dictionary<FilterCondition, ReorderableList> _typesLists =
             new Dictionary<FilterCondition, ReorderableList>();
+        private readonly Dictionary<SyncConfig, ReorderableList> _ignoreLists =
+            new Dictionary<SyncConfig, ReorderableList>();
 
         private int SelectedConfigIndex => _configTreeView?.SelectedIndex ?? -1;
 
@@ -71,63 +76,73 @@ namespace Nyorowrl.Assetfork.Editor
                 return;
             }
 
+            if (_settings.syncConfigs == null)
+            {
+                _settings.syncConfigs = new List<SyncConfig>();
+                EditorUtility.SetDirty(_settings);
+            }
+
             EditorGUILayout.Space();
 
-            EditorGUILayout.BeginHorizontal();
-            DrawConfigList();
-            DrawResizeHandle();
-            DrawConfigDetail();
-            EditorGUILayout.EndHorizontal();
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                DrawConfigList();
+                DrawResizeHandle();
+                DrawConfigDetail();
+            }
         }
 
         private void DrawSettingsField()
         {
-            EditorGUILayout.BeginHorizontal();
-
-            EditorGUI.BeginChangeCheck();
-            _settings = (AssetForkSettings)EditorGUILayout.ObjectField("Settings", _settings, typeof(AssetForkSettings), false);
-            if (EditorGUI.EndChangeCheck())
+            using (new EditorGUILayout.HorizontalScope())
             {
-                _typesLists.Clear();
-                string path = _settings != null ? AssetDatabase.GetAssetPath(_settings) : "";
-                EditorPrefs.SetString(SettingsPathPrefKey, path);
-                RebuildTreeView();
-            }
 
-            if (GUILayout.Button("New", GUILayout.Width(50)))
-            {
-                string path = EditorUtility.SaveFilePanelInProject(
-                    "Create AssetFork Settings",
-                    "AssetForkSettings",
-                    "asset",
-                    "Create a new AssetFork settings file");
-
-                if (!string.IsNullOrEmpty(path))
+                EditorGUI.BeginChangeCheck();
+                _settings = (AssetForkSettings)EditorGUILayout.ObjectField("Settings", _settings, typeof(AssetForkSettings), false);
+                if (EditorGUI.EndChangeCheck())
                 {
-                    var newSettings = CreateInstance<AssetForkSettings>();
-                    AssetDatabase.CreateAsset(newSettings, path);
-                    AssetDatabase.SaveAssets();
-                    _settings = newSettings;
                     _typesLists.Clear();
+                    _ignoreLists.Clear();
+                    string path = _settings != null ? AssetDatabase.GetAssetPath(_settings) : "";
                     EditorPrefs.SetString(SettingsPathPrefKey, path);
                     RebuildTreeView();
                 }
-            }
 
-            EditorGUILayout.EndHorizontal();
+                if (GUILayout.Button("New", GUILayout.Width(50)))
+                {
+                    string path = EditorUtility.SaveFilePanelInProject(
+                        "Create AssetFork Settings",
+                        "AssetForkSettings",
+                        "asset",
+                        "Create a new AssetFork settings file");
+
+                    if (!string.IsNullOrEmpty(path))
+                    {
+                        var newSettings = CreateInstance<AssetForkSettings>();
+                        AssetDatabase.CreateAsset(newSettings, path);
+                        AssetDatabase.SaveAssets();
+                        _settings = newSettings;
+                        _typesLists.Clear();
+                        _ignoreLists.Clear();
+                        EditorPrefs.SetString(SettingsPathPrefKey, path);
+                        RebuildTreeView();
+                    }
+                }
+            }
         }
 
         private void DrawConfigList()
         {
-            EditorGUILayout.BeginVertical(GUILayout.Width(_listPanelWidth));
+            using (new EditorGUILayout.VerticalScope(GUILayout.Width(_listPanelWidth)))
+            {
 
-            Rect treeRect = GUILayoutUtility.GetRect(
-                _listPanelWidth, _listPanelWidth,
-                0, float.MaxValue,
-                GUILayout.ExpandHeight(true));
-            _configTreeView.OnGUI(treeRect);
+                Rect treeRect = GUILayoutUtility.GetRect(
+                    _listPanelWidth, _listPanelWidth,
+                    0, float.MaxValue,
+                    GUILayout.ExpandHeight(true));
+                _configTreeView.OnGUI(treeRect);
 
-            EditorGUILayout.EndVertical();
+            }
         }
 
         private void AddConfig()
@@ -175,103 +190,111 @@ namespace Nyorowrl.Assetfork.Editor
 
         private void DrawConfigDetail()
         {
-            EditorGUILayout.BeginVertical();
-            _detailScrollPosition = EditorGUILayout.BeginScrollView(_detailScrollPosition);
-
-            int idx = SelectedConfigIndex;
-            if (idx < 0 || idx >= _settings.syncConfigs.Count)
+            using (new EditorGUILayout.VerticalScope())
+            using (var scrollView = new EditorGUILayout.ScrollViewScope(_detailScrollPosition))
             {
-                GUILayout.Label("リストから Config を選択してください。", EditorStyles.centeredGreyMiniLabel);
-                EditorGUILayout.EndScrollView();
-                EditorGUILayout.EndVertical();
-                return;
-            }
+                _detailScrollPosition = scrollView.scrollPosition;
 
-            var config = _settings.syncConfigs[idx];
-
-            EditorGUI.BeginChangeCheck();
-            bool newEnabled = EditorGUILayout.Toggle("Enable", config.enabled);
-            if (EditorGUI.EndChangeCheck())
-            {
-                Undo.RecordObject(_settings, "Toggle Config");
-                config.enabled = newEnabled;
-                ApplyConfigChange(config);
-            }
-
-            var srcObj = string.IsNullOrEmpty(config.sourcePath)
-                ? null : AssetDatabase.LoadAssetAtPath<DefaultAsset>(config.sourcePath);
-            var newSrcObj = (DefaultAsset)EditorGUILayout.ObjectField("Source", srcObj, typeof(DefaultAsset), false);
-            if (newSrcObj != srcObj)
-            {
-                string selectedPath = AssetDatabase.GetAssetPath(newSrcObj);
-                if (!string.IsNullOrEmpty(selectedPath) && !AssetDatabase.IsValidFolder(selectedPath))
+                int idx = SelectedConfigIndex;
+                if (idx < 0 || idx >= _settings.syncConfigs.Count)
                 {
-                    Debug.LogWarning("[AssetFork] Source must be a folder.");
+                    GUILayout.Label("リストから Config を選択してください。", EditorStyles.centeredGreyMiniLabel);
+                    return;
                 }
-                else
+
+                var config = _settings.syncConfigs[idx];
+                EnsureConfigCollections(config);
+
+                EditorGUI.BeginChangeCheck();
+                bool newEnabled = EditorGUILayout.Toggle("Enable", config.enabled);
+                if (EditorGUI.EndChangeCheck())
                 {
-                    Undo.RecordObject(_settings, "Set Source");
-                    config.sourcePath = selectedPath;
+                    Undo.RecordObject(_settings, "Toggle Config");
+                    config.enabled = newEnabled;
+                    ApplyEnableStateChange(config);
+                }
+
+                var srcObj = string.IsNullOrEmpty(config.sourcePath)
+                    ? null : AssetDatabase.LoadAssetAtPath<DefaultAsset>(config.sourcePath);
+                var newSrcObj = (DefaultAsset)EditorGUILayout.ObjectField("Source", srcObj, typeof(DefaultAsset), false);
+                if (newSrcObj != srcObj)
+                {
+                    string selectedPath = AssetDatabase.GetAssetPath(newSrcObj);
+                    if (!string.IsNullOrEmpty(selectedPath) && !AssetDatabase.IsValidFolder(selectedPath))
+                    {
+                        Debug.LogWarning("[AssetFork] Source must be a folder.");
+                    }
+                    else
+                    {
+                        Undo.RecordObject(_settings, "Set Source");
+                        config.sourcePath = selectedPath;
+                        ApplyConfigChange(config);
+                    }
+                }
+
+                var dstObj = string.IsNullOrEmpty(config.destinationPath)
+                    ? null : AssetDatabase.LoadAssetAtPath<DefaultAsset>(config.destinationPath);
+                var newDstObj = (DefaultAsset)EditorGUILayout.ObjectField("Destination", dstObj, typeof(DefaultAsset), false);
+                if (newDstObj != dstObj)
+                {
+                    string selectedPath = AssetDatabase.GetAssetPath(newDstObj);
+                    if (!string.IsNullOrEmpty(selectedPath) && !AssetDatabase.IsValidFolder(selectedPath))
+                    {
+                        Debug.LogWarning("[AssetFork] Destination must be a folder.");
+                    }
+                    else
+                    {
+                        Undo.RecordObject(_settings, "Set Destination");
+                        config.destinationPath = selectedPath;
+                        ApplyConfigChange(config);
+                    }
+                }
+
+                EditorGUI.BeginChangeCheck();
+                bool newIncludeSubdirectories = EditorGUILayout.Toggle("Include Subdirectories", config.includeSubdirectories);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    Undo.RecordObject(_settings, "Toggle Include Subdirectories");
+                    config.includeSubdirectories = newIncludeSubdirectories;
                     ApplyConfigChange(config);
                 }
-            }
 
-            var dstObj = string.IsNullOrEmpty(config.destinationPath)
-                ? null : AssetDatabase.LoadAssetAtPath<DefaultAsset>(config.destinationPath);
-            var newDstObj = (DefaultAsset)EditorGUILayout.ObjectField("Destination", dstObj, typeof(DefaultAsset), false);
-            if (newDstObj != dstObj)
-            {
-                string selectedPath = AssetDatabase.GetAssetPath(newDstObj);
-                if (!string.IsNullOrEmpty(selectedPath) && !AssetDatabase.IsValidFolder(selectedPath))
+                if (AssetSyncer.TryGetConfigWarning(config, out string warning))
                 {
-                    Debug.LogWarning("[AssetFork] Destination must be a folder.");
+                    EditorGUILayout.HelpBox(warning, MessageType.Warning);
                 }
-                else
-                {
-                    Undo.RecordObject(_settings, "Set Destination");
-                    config.destinationPath = selectedPath;
-                    ApplyConfigChange(config);
-                }
-            }
 
-            EditorGUI.BeginChangeCheck();
-            bool newIncludeSubdirectories = EditorGUILayout.Toggle("Include Subdirectories", config.includeSubdirectories);
-            if (EditorGUI.EndChangeCheck())
-            {
-                Undo.RecordObject(_settings, "Toggle Include Subdirectories");
-                config.includeSubdirectories = newIncludeSubdirectories;
-                ApplyConfigChange(config);
+                EditorGUILayout.Space();
+                DrawFilterList(config);
+                EditorGUILayout.Space();
+                DrawIgnoreList(config);
             }
-
-            if (AssetSyncer.TryGetConfigWarning(config, out string warning))
-            {
-                EditorGUILayout.HelpBox(warning, MessageType.Warning);
-            }
-
-            EditorGUILayout.Space();
-            DrawFilterList(config);
-            EditorGUILayout.EndScrollView();
-            EditorGUILayout.EndVertical();
         }
 
         private void DrawFilterList(SyncConfig config)
         {
-            EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("Filters", EditorStyles.boldLabel);
-            GUILayout.FlexibleSpace();
-            var addIcon = EditorGUIUtility.IconContent("d_Toolbar Plus");
-            addIcon.tooltip = "Add Filter";
-            if (GUILayout.Button(addIcon, EditorStyles.iconButton))
+            EnsureConfigCollections(config);
+
+            using (new EditorGUILayout.HorizontalScope())
             {
-                Undo.RecordObject(_settings, "Add Filter");
-                config.filters.Add(new FilterCondition());
-                ApplyConfigChange(config);
+                EditorGUILayout.LabelField("Filters", EditorStyles.boldLabel);
+                GUILayout.FlexibleSpace();
+                var addIcon = EditorGUIUtility.IconContent("d_Toolbar Plus");
+                addIcon.tooltip = "Add Filter";
+                if (GUILayout.Button(addIcon, EditorStyles.iconButton))
+                {
+                    Undo.RecordObject(_settings, "Add Filter");
+                    config.filters.Add(new FilterCondition());
+                    ApplyConfigChange(config);
+                }
             }
-            EditorGUILayout.EndHorizontal();
 
             int deleteIndex = -1;
             for (int i = 0; i < config.filters.Count; i++)
+            {
+                config.filters[i] ??= new FilterCondition();
                 DrawFilterCondition(config.filters[i], i, ref deleteIndex, config);
+            }
 
             if (deleteIndex >= 0)
             {
@@ -284,69 +307,78 @@ namespace Nyorowrl.Assetfork.Editor
 
         private void DrawFilterCondition(FilterCondition filter, int index, ref int deleteIndex, SyncConfig config)
         {
-            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            filter.multipleTypeNames ??= new List<string>();
 
-            EditorGUILayout.BeginHorizontal();
-            EditorGUI.BeginChangeCheck();
-            bool newInvert = EditorGUILayout.Toggle("Exclude", filter.invert);
-            if (EditorGUI.EndChangeCheck())
+            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
             {
-                Undo.RecordObject(_settings, "Toggle Filter Mode");
-                filter.invert = newInvert;
-                ApplyConfigChange(config);
-            }
-            GUILayout.FlexibleSpace();
-            var deleteFilterIcon = EditorGUIUtility.IconContent("CrossIcon");
-            deleteFilterIcon.tooltip = "Delete Filter";
-            if (GUILayout.Button(deleteFilterIcon, EditorStyles.iconButton))
-                deleteIndex = index;
-            EditorGUILayout.EndHorizontal();
 
-            EditorGUI.BeginChangeCheck();
-            bool newUseMultipleTypes = EditorGUILayout.Toggle("Multiple Types", filter.useMultipleTypes);
-            if (EditorGUI.EndChangeCheck())
-            {
-                Undo.RecordObject(_settings, "Change Filter Mode");
-                if (newUseMultipleTypes)
+                using (new EditorGUILayout.HorizontalScope())
                 {
-                    filter.multipleTypeNames.Clear();
-                    if (!string.IsNullOrEmpty(filter.singleTypeName))
-                        filter.multipleTypeNames.Add(filter.singleTypeName);
+                    EditorGUI.BeginChangeCheck();
+                    bool newInvert = EditorGUILayout.Toggle("Exclude", filter.invert);
+                    if (EditorGUI.EndChangeCheck())
+                    {
+                        Undo.RecordObject(_settings, "Toggle Filter Mode");
+                        filter.invert = newInvert;
+                        ApplyConfigChange(config);
+                    }
+                    GUILayout.FlexibleSpace();
+                    var deleteFilterIcon = EditorGUIUtility.IconContent("CrossIcon");
+                    deleteFilterIcon.tooltip = "Delete Filter";
+                    if (GUILayout.Button(deleteFilterIcon, EditorStyles.iconButton))
+                        deleteIndex = index;
+                }
+
+                EditorGUI.BeginChangeCheck();
+                bool newUseMultipleTypes = EditorGUILayout.Toggle("Multiple Types", filter.useMultipleTypes);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    Undo.RecordObject(_settings, "Change Filter Mode");
+                    if (newUseMultipleTypes)
+                    {
+                        filter.multipleTypeNames.Clear();
+                        if (!string.IsNullOrEmpty(filter.singleTypeName))
+                            filter.multipleTypeNames.Add(filter.singleTypeName);
+                    }
+                    else
+                    {
+                        filter.singleTypeName = filter.multipleTypeNames.Count > 0
+                            ? filter.multipleTypeNames[0] : "";
+                    }
+                    filter.useMultipleTypes = newUseMultipleTypes;
+                    _typesLists.Remove(filter);
+                    ApplyConfigChange(config);
+                }
+
+                EditorGUILayout.LabelField("Type", EditorStyles.miniLabel);
+                if (filter.useMultipleTypes)
+                {
+                    GetOrCreateTypesList(filter, config).DoLayoutList();
                 }
                 else
                 {
-                    filter.singleTypeName = filter.multipleTypeNames.Count > 0
-                        ? filter.multipleTypeNames[0] : "";
-                }
-                filter.useMultipleTypes = newUseMultipleTypes;
-                _typesLists.Remove(filter);
-                ApplyConfigChange(config);
-            }
-
-            EditorGUILayout.LabelField("Type", EditorStyles.miniLabel);
-            if (filter.useMultipleTypes)
-            {
-                GetOrCreateTypesList(filter, config).DoLayoutList();
-            }
-            else
-            {
-                string typeDisplay = string.IsNullOrEmpty(filter.singleTypeName)
-                    ? "Select Type..."
-                    : NicifyTypeName(filter.singleTypeName);
-                if (GUILayout.Button(typeDisplay, EditorStyles.popup))
-                {
-                    var dropdown = new TypeSelectorDropdown(new AdvancedDropdownState(),
-                        n =>
-                        {
-                            Undo.RecordObject(_settings, "Change Type");
-                            filter.singleTypeName = n;
-                            ApplyConfigChange(config);
-                        });
-                    dropdown.Show(GUILayoutUtility.GetLastRect());
+                    string typeDisplay = string.IsNullOrEmpty(filter.singleTypeName)
+                        ? "Select Type..."
+                        : NicifyTypeName(filter.singleTypeName);
+                    if (GUILayout.Button(typeDisplay, EditorStyles.popup))
+                    {
+                        var dropdown = new TypeSelectorDropdown(new AdvancedDropdownState(),
+                            n =>
+                            {
+                                Undo.RecordObject(_settings, "Change Type");
+                                filter.singleTypeName = n;
+                                ApplyConfigChange(config);
+                            });
+                        dropdown.Show(GUILayoutUtility.GetLastRect());
+                    }
                 }
             }
+        }
 
-            EditorGUILayout.EndVertical();
+        private void DrawIgnoreList(SyncConfig config)
+        {
+            config.ignoreGuids ??= new List<string>();
+            GetOrCreateIgnoreList(config).DoLayoutList();
         }
 
         private ReorderableList GetOrCreateTypesList(FilterCondition filter, SyncConfig config)
@@ -401,6 +433,65 @@ namespace Nyorowrl.Assetfork.Editor
             return list;
         }
 
+        private ReorderableList GetOrCreateIgnoreList(SyncConfig config)
+        {
+            if (_ignoreLists.TryGetValue(config, out var existing))
+                return existing;
+
+            config.ignoreGuids ??= new List<string>();
+
+            var list = new ReorderableList(config.ignoreGuids, typeof(string),
+                draggable: true, displayHeader: true, displayAddButton: true, displayRemoveButton: true);
+
+            list.drawHeaderCallback = rect => EditorGUI.LabelField(rect, "Ignore Assets");
+            list.elementHeight = EditorGUIUtility.singleLineHeight + 2;
+
+            list.drawElementCallback = (rect, index, isActive, isFocused) =>
+            {
+                if (index < 0 || index >= config.ignoreGuids.Count)
+                    return;
+
+                string guid = config.ignoreGuids[index];
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                UnityEngine.Object current = string.IsNullOrEmpty(path)
+                    ? null
+                    : AssetDatabase.LoadMainAssetAtPath(path);
+
+                var fieldRect = new Rect(rect.x, rect.y + 1, rect.width, EditorGUIUtility.singleLineHeight);
+                EditorGUI.BeginChangeCheck();
+                var next = EditorGUI.ObjectField(fieldRect, $"Element {index}", current, typeof(UnityEngine.Object), false);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    Undo.RecordObject(_settings, "Change Ignore Asset");
+                    string nextPath = AssetDatabase.GetAssetPath(next);
+                    config.ignoreGuids[index] = string.IsNullOrEmpty(nextPath)
+                        ? string.Empty
+                        : AssetDatabase.AssetPathToGUID(nextPath);
+                    ApplyConfigChange(config);
+                }
+            };
+
+            list.onAddCallback = _ =>
+            {
+                Undo.RecordObject(_settings, "Add Ignore Asset");
+                config.ignoreGuids.Add(string.Empty);
+                ApplyConfigChange(config);
+            };
+
+            list.onRemoveCallback = _ =>
+            {
+                if (list.index < 0 || list.index >= config.ignoreGuids.Count)
+                    return;
+
+                Undo.RecordObject(_settings, "Delete Ignore Asset");
+                config.ignoreGuids.RemoveAt(list.index);
+                ApplyConfigChange(config);
+            };
+
+            _ignoreLists[config] = list;
+            return list;
+        }
+
         private void DeleteConfig(int idx)
         {
             if (_settings == null || idx < 0 || idx >= _settings.syncConfigs.Count) return;
@@ -409,6 +500,7 @@ namespace Nyorowrl.Assetfork.Editor
             _settings.syncConfigs.RemoveAt(idx);
             EditorUtility.SetDirty(_settings);
             _typesLists.Clear();
+            _ignoreLists.Clear();
 
             _configTreeView.Reload();
             int next = Mathf.Clamp(idx - 1, 0, _settings.syncConfigs.Count - 1);
@@ -421,9 +513,40 @@ namespace Nyorowrl.Assetfork.Editor
         private void ApplyConfigChange(SyncConfig config)
         {
             EditorUtility.SetDirty(_settings);
+            if (!config.enabled)
+            {
+                AssetSyncer.PruneSyncPathsForDisabledConfig(config);
+                return;
+            }
             if (string.IsNullOrEmpty(config.sourcePath) || string.IsNullOrEmpty(config.destinationPath))
                 return;
-            AssetSyncer.SyncConfig(config);
+            EnqueueDeferredSync(() =>
+            {
+                if (_settings == null || config == null)
+                    return;
+
+                AssetSyncer.SyncConfig(config, out bool stateChanged);
+                if (stateChanged)
+                    EditorUtility.SetDirty(_settings);
+            });
+        }
+
+        private void ApplyEnableStateChange(SyncConfig config)
+        {
+            EditorUtility.SetDirty(_settings);
+            if (string.IsNullOrEmpty(config.sourcePath) || string.IsNullOrEmpty(config.destinationPath))
+                return;
+
+            // Explicit enable toggle is the only time disabled-state sync cleanup should run.
+            EnqueueDeferredSync(() =>
+            {
+                if (_settings == null || config == null)
+                    return;
+
+                AssetSyncer.SyncConfig(config, out bool stateChanged);
+                if (stateChanged)
+                    EditorUtility.SetDirty(_settings);
+            });
         }
 
         private static string NicifyTypeName(string assemblyQualifiedName)
@@ -433,6 +556,44 @@ namespace Nyorowrl.Assetfork.Editor
             string fullName = comma >= 0 ? assemblyQualifiedName.Substring(0, comma).Trim() : assemblyQualifiedName;
             int dot = fullName.LastIndexOf('.');
             return ObjectNames.NicifyVariableName(dot >= 0 ? fullName.Substring(dot + 1) : fullName);
+        }
+
+        private static void EnsureConfigCollections(SyncConfig config)
+        {
+            config.filters ??= new List<FilterCondition>();
+            config.ignoreGuids ??= new List<string>();
+            config.syncRelativePaths ??= new List<string>();
+        }
+
+        private void EnqueueDeferredSync(Action syncAction)
+        {
+            if (syncAction == null)
+                return;
+
+            _deferredSyncActions.Enqueue(syncAction);
+            if (_deferredSyncScheduled)
+                return;
+
+            _deferredSyncScheduled = true;
+            EditorApplication.delayCall += FlushDeferredSyncActions;
+        }
+
+        private void FlushDeferredSyncActions()
+        {
+            _deferredSyncScheduled = false;
+
+            while (_deferredSyncActions.Count > 0)
+            {
+                var action = _deferredSyncActions.Dequeue();
+                action?.Invoke();
+            }
+        }
+
+        private void OnDisable()
+        {
+            EditorApplication.delayCall -= FlushDeferredSyncActions;
+            _deferredSyncActions.Clear();
+            _deferredSyncScheduled = false;
         }
     }
 }
