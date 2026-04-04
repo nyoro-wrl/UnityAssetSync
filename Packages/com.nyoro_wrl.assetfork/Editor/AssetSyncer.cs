@@ -221,8 +221,6 @@ namespace Nyorowrl.Assetfork.Editor
 
                     if (destinationProtectedPaths.Contains(rel))
                     {
-                        if (owned.Remove(rel))
-                            stateChanged = true;
                         continue;
                     }
 
@@ -302,8 +300,6 @@ namespace Nyorowrl.Assetfork.Editor
             {
                 if (destinationProtectedPaths.Contains(rel))
                 {
-                    owned.Remove(rel);
-                    stateChanged = true;
                     continue;
                 }
 

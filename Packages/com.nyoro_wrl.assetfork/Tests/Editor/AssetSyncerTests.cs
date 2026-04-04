@@ -842,6 +842,31 @@ namespace Nyorowrl.Assetfork.Editor.Tests
         }
 
         [Test]
+        public void ProtectedDestination_RemoveProtection_ResumesSyncWithoutConflict()
+        {
+            var config = MakeConfig();
+            WriteSrc("file.txt", "v1");
+            AssetSyncer.SyncConfig(config);
+            Assert.AreEqual("v1", ReadDst("file.txt"));
+            Assert.IsTrue(OwnedContains(config, "file.txt"));
+
+            AssetDatabase.Refresh();
+            string dstAssetPath = _dstAssetPath + "/file.txt";
+            string dstGuid = AssetDatabase.AssetPathToGUID(dstAssetPath);
+            Assume.That(!string.IsNullOrEmpty(dstGuid), "destination GUID must be available");
+
+            config.protectedGuids.Add(dstGuid);
+            WriteSrc("file.txt", "v2");
+            AssetSyncer.SyncConfig(config);
+            Assert.AreEqual("v1", ReadDst("file.txt"), "destination protected file should not update");
+            Assert.IsTrue(OwnedContains(config, "file.txt"), "owned state should be retained while destination is protected");
+
+            config.protectedGuids.Remove(dstGuid);
+            AssetSyncer.SyncConfig(config);
+            Assert.AreEqual("v2", ReadDst("file.txt"), "sync should resume after removing destination protection");
+        }
+
+        [Test]
         public void PostprocessorPathMatch_ExactRootAndChildOnly()
         {
             const string root = "Assets/Foo";
