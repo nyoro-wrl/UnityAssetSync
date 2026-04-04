@@ -407,24 +407,6 @@ namespace Nyorowrl.Assetfork.Editor
                 deleteIndex = index;
             EditorGUILayout.EndHorizontal();
 
-            var state = AssetSyncer.GetProtectedEntryState(config, config.protectedGuids[index], out string resolvedPath, out string relativePath);
-            string statusText;
-            if (state == AssetSyncer.ProtectedEntryState.Source)
-                statusText = $"State: Source ({relativePath})";
-            else if (state == AssetSyncer.ProtectedEntryState.Destination)
-                statusText = $"State: Destination ({relativePath})";
-            else
-                statusText = "State: Invalid (outside Source/Destination or missing asset)";
-
-            var prevColor = GUI.contentColor;
-            if (state == AssetSyncer.ProtectedEntryState.Invalid)
-                GUI.contentColor = Color.yellow;
-            EditorGUILayout.LabelField(statusText, EditorStyles.miniLabel);
-            GUI.contentColor = prevColor;
-
-            if (!string.IsNullOrEmpty(resolvedPath))
-                EditorGUILayout.LabelField($"Path: {resolvedPath}", EditorStyles.miniLabel);
-
             EditorGUILayout.EndVertical();
         }
 
