@@ -10,26 +10,17 @@ namespace Nyorowrl.Assetfork.Editor
     internal static class SyncedAssetProjectWindowOverlay
     {
         private const double AutoRefreshIntervalSeconds = 2.0d;
-
-        private static readonly string[] BadgeIconNames =
-        {
-            "d_RotateTool",
-            "RotateTool",
-            "d_Refresh",
-            "Refresh",
-            "d_PreMatQuad",
-            "PreMatQuad"
-        };
+        private const string CustomBadgeIconPath = "Packages/com.nyoro_wrl.assetfork/Editor/Icons/icon.png";
 
         private static readonly HashSet<string> SyncedAssetPaths = new HashSet<string>(StringComparer.Ordinal);
-        private static readonly GUIContent BadgeIcon;
 
         private static bool _cacheDirty = true;
         private static double _nextAutoRefreshAt;
+        private static Texture2D _customBadgeIcon;
 
         static SyncedAssetProjectWindowOverlay()
         {
-            BadgeIcon = ResolveBadgeIcon();
+            _customBadgeIcon = ResolveCustomBadgeIcon();
 
             EditorApplication.projectWindowItemOnGUI += OnProjectWindowItemGUI;
             EditorApplication.projectChanged += MarkCacheDirty;
@@ -104,30 +95,13 @@ namespace Nyorowrl.Assetfork.Editor
             float size = itemRect.height <= 20f ? 18f : 24f;
             Rect badgeRect = GetBadgeRect(itemRect, size);
 
-            EditorGUI.DrawRect(badgeRect, new Color(0.08f, 0.08f, 0.08f, 0.96f));
+            if (_customBadgeIcon == null)
+                _customBadgeIcon = ResolveCustomBadgeIcon();
 
-            if (BadgeIcon != null && BadgeIcon.image != null)
-            {
-                float iconInset = Mathf.Max(2f, badgeRect.width * 0.18f);
-                Rect iconRect = new Rect(
-                    badgeRect.x + iconInset,
-                    badgeRect.y + iconInset,
-                    badgeRect.width - (iconInset * 2f),
-                    badgeRect.height - (iconInset * 2f));
-                Color previousColor = GUI.color;
-                GUI.color = Color.white;
-                GUI.DrawTexture(iconRect, BadgeIcon.image, ScaleMode.ScaleToFit, true);
-                GUI.color = previousColor;
+            if (_customBadgeIcon == null)
                 return;
-            }
 
-            float inset = Mathf.Max(2f, badgeRect.width * 0.22f);
-            var innerRect = new Rect(
-                badgeRect.x + inset,
-                badgeRect.y + inset,
-                Mathf.Max(1f, badgeRect.width - (inset * 2f)),
-                Mathf.Max(1f, badgeRect.height - (inset * 2f)));
-            EditorGUI.DrawRect(innerRect, Color.white);
+            GUI.DrawTexture(badgeRect, _customBadgeIcon, ScaleMode.ScaleToFit, true);
         }
 
         private static Rect GetBadgeRect(Rect itemRect, float size)
@@ -143,16 +117,9 @@ namespace Nyorowrl.Assetfork.Editor
             return new Rect(itemRect.x + iconAreaSize - size - 1f, itemRect.y + iconAreaSize - size - 1f, size, size);
         }
 
-        private static GUIContent ResolveBadgeIcon()
+        private static Texture2D ResolveCustomBadgeIcon()
         {
-            foreach (string iconName in BadgeIconNames)
-            {
-                GUIContent content = EditorGUIUtility.IconContent(iconName);
-                if (content != null && content.image != null)
-                    return content;
-            }
-
-            return null;
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(CustomBadgeIconPath);
         }
 
         private static void MarkCacheDirty()
