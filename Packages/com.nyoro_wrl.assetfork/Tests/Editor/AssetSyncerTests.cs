@@ -867,6 +867,70 @@ namespace Nyorowrl.Assetfork.Editor.Tests
         }
 
         [Test]
+        public void ProtectedDestination_RemoveProtection_AfterDisableEnable_ResumesSyncWithoutConflict()
+        {
+            var config = MakeConfig();
+            WriteSrc("file.txt", "v1");
+            AssetSyncer.SyncConfig(config);
+            Assert.AreEqual("v1", ReadDst("file.txt"));
+            Assert.IsTrue(OwnedContains(config, "file.txt"));
+
+            AssetDatabase.Refresh();
+            string dstAssetPath = _dstAssetPath + "/file.txt";
+            string dstGuid = AssetDatabase.AssetPathToGUID(dstAssetPath);
+            Assume.That(!string.IsNullOrEmpty(dstGuid), "destination GUID must be available");
+
+            config.protectedGuids.Add(dstGuid);
+            WriteSrc("file.txt", "v2");
+            AssetSyncer.SyncConfig(config);
+            Assert.AreEqual("v1", ReadDst("file.txt"), "destination protected file should not update");
+            Assert.IsTrue(OwnedContains(config, "file.txt"), "owned state should be retained while destination is protected");
+
+            config.enabled = false;
+            AssetSyncer.SyncConfig(config);
+            Assert.IsTrue(DstExists("file.txt"), "destination protected file should remain when sync is disabled");
+            Assert.IsTrue(OwnedContains(config, "file.txt"), "owned state should be retained for destination protected files while disabled");
+
+            config.enabled = true;
+            AssetSyncer.SyncConfig(config);
+
+            int conflictDialogCalls = 0;
+            AssetSyncer.ConflictResolverOverride = (SyncConfig _, IReadOnlyList<AssetSyncer.SyncConflict> conflicts, out Dictionary<string, AssetSyncer.ConflictResolution> decisions) =>
+            {
+                conflictDialogCalls++;
+                decisions = new Dictionary<string, AssetSyncer.ConflictResolution>();
+                foreach (var conflict in conflicts)
+                    decisions[conflict.NormalizedRelativePath] = AssetSyncer.ConflictResolution.Protected;
+                return true;
+            };
+
+            config.protectedGuids.Remove(dstGuid);
+            AssetSyncer.SyncConfig(config);
+
+            Assert.AreEqual(0, conflictDialogCalls, "removing destination protection should not open conflicts dialog");
+            Assert.AreEqual("v2", ReadDst("file.txt"), "sync should resume after removing destination protection");
+            Assert.IsTrue(OwnedContains(config, "file.txt"), "file should remain owned after protection is removed");
+        }
+
+        [Test]
+        public void CollectSyncedDestinationOwnedRelativePaths_ExcludesDestinationProtected()
+        {
+            var config = MakeConfig();
+            WriteSrc("protected.txt", "p1");
+            WriteSrc("normal.txt", "n1");
+            AssetSyncer.SyncConfig(config);
+
+            AssetDatabase.Refresh();
+            string protectedGuid = AssetDatabase.AssetPathToGUID(_dstAssetPath + "/protected.txt");
+            Assume.That(!string.IsNullOrEmpty(protectedGuid), "destination protected asset guid must exist");
+            config.protectedGuids.Add(protectedGuid);
+
+            HashSet<string> syncedOwned = AssetSyncer.CollectSyncedDestinationOwnedRelativePaths(config);
+            Assert.IsFalse(syncedOwned.Contains("protected.txt"));
+            Assert.IsTrue(syncedOwned.Contains("normal.txt"));
+        }
+
+        [Test]
         public void PostprocessorPathMatch_ExactRootAndChildOnly()
         {
             const string root = "Assets/Foo";

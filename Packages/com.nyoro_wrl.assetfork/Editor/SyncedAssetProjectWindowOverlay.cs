@@ -76,15 +76,9 @@ namespace Nyorowrl.Assetfork.Editor
                     if (string.IsNullOrEmpty(destinationRoot) || config.ownedRelativePaths == null)
                         continue;
 
-                    HashSet<string> destinationProtectedRelativePaths = CollectDestinationProtectedRelativePaths(config);
-                    foreach (string relativePath in config.ownedRelativePaths)
+                    HashSet<string> syncedOwnedRelativePaths = AssetSyncer.CollectSyncedDestinationOwnedRelativePaths(config);
+                    foreach (string normalizedRelativePath in syncedOwnedRelativePaths)
                     {
-                        string normalizedRelativePath = AssetSyncer.NormalizeRelativePath(relativePath);
-                        if (string.IsNullOrEmpty(normalizedRelativePath))
-                            continue;
-                        if (destinationProtectedRelativePaths.Contains(normalizedRelativePath))
-                            continue;
-
                         SyncedAssetPaths.Add(destinationRoot + "/" + normalizedRelativePath);
                     }
                 }
@@ -128,28 +122,6 @@ namespace Nyorowrl.Assetfork.Editor
         private static void MarkCacheDirty()
         {
             _cacheDirty = true;
-        }
-
-        private static HashSet<string> CollectDestinationProtectedRelativePaths(SyncConfig config)
-        {
-            var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            if (config?.protectedGuids == null)
-                return result;
-
-            foreach (string guid in config.protectedGuids)
-            {
-                var state = AssetSyncer.GetProtectedEntryState(config, guid, out _, out string relativePath);
-                if (state != AssetSyncer.ProtectedEntryState.Destination)
-                    continue;
-
-                string normalizedRelativePath = AssetSyncer.NormalizeRelativePath(relativePath);
-                if (string.IsNullOrEmpty(normalizedRelativePath))
-                    continue;
-
-                result.Add(normalizedRelativePath);
-            }
-
-            return result;
         }
 
         private static string NormalizeAssetPath(string path)

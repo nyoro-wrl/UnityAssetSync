@@ -93,5 +93,49 @@ namespace Nyorowrl.Assetfork.Editor.Tests
             Assert.IsFalse(syncedPaths.Contains(protectedFullPath), "destination-protected owned path should not show synced badge");
             Assert.IsTrue(syncedPaths.Contains(normalFullPath), "non-protected owned path should still show synced badge");
         }
+
+        [Test]
+        public void RebuildSyncedPathCache_DisabledConfig_DoesNotShowBadge()
+        {
+            string projectRoot = Path.GetDirectoryName(Application.dataPath);
+            string relativePath = "file.txt";
+
+            File.WriteAllText(Path.Combine(projectRoot, _dstAssetPath, relativePath), "dst");
+            AssetDatabase.Refresh();
+
+            var settings = ScriptableObject.CreateInstance<AssetForkSettings>();
+            settings.syncConfigs = new List<SyncConfig>
+            {
+                new SyncConfig
+                {
+                    configName = "OverlayDisabledTest",
+                    enabled = false,
+                    sourcePath = _srcAssetPath,
+                    destinationPath = _dstAssetPath,
+                    ownedRelativePaths = new List<string> { relativePath },
+                    protectedGuids = new List<string>()
+                }
+            };
+
+            string settingsAssetPath = _testRoot + "/AssetForkOverlayDisabledSettings.asset";
+            AssetDatabase.CreateAsset(settings, settingsAssetPath);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+
+            MethodInfo rebuildMethod = typeof(SyncedAssetProjectWindowOverlay)
+                .GetMethod("RebuildSyncedPathCache", BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.IsNotNull(rebuildMethod, "RebuildSyncedPathCache method not found");
+            rebuildMethod.Invoke(null, null);
+
+            FieldInfo pathsField = typeof(SyncedAssetProjectWindowOverlay)
+                .GetField("SyncedAssetPaths", BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.IsNotNull(pathsField, "SyncedAssetPaths field not found");
+
+            var syncedPaths = pathsField.GetValue(null) as HashSet<string>;
+            Assert.IsNotNull(syncedPaths, "SyncedAssetPaths must be a HashSet<string>");
+
+            string fullPath = _dstAssetPath + "/" + relativePath;
+            Assert.IsFalse(syncedPaths.Contains(fullPath), "disabled config should not show synced badge");
+        }
     }
 }

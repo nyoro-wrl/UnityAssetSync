@@ -151,10 +151,10 @@ namespace Nyorowrl.Assetfork.Editor
                     string dstFile = Path.Combine(dstRoot, relSystem);
                     if (DeleteFileAndMeta(dstFile))
                         fileSystemChanged = true;
-                }
 
-                owned.Remove(rel);
-                stateChanged = true;
+                    owned.Remove(rel);
+                    stateChanged = true;
+                }
             }
 
             stateChanged |= SetOwnedPaths(config, owned);
@@ -532,6 +532,35 @@ namespace Nyorowrl.Assetfork.Editor
                 else if (state == ProtectedEntryState.Destination)
                     destinationProtectedPaths.Add(rel);
             }
+        }
+
+        internal static HashSet<string> CollectDestinationProtectedRelativePaths(SyncConfig config)
+        {
+            var sourceProtectedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var destinationProtectedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            BuildProtectedPathSets(config, sourceProtectedPaths, destinationProtectedPaths);
+            return destinationProtectedPaths;
+        }
+
+        internal static HashSet<string> CollectSyncedDestinationOwnedRelativePaths(SyncConfig config)
+        {
+            var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (config?.ownedRelativePaths == null)
+                return result;
+
+            HashSet<string> destinationProtectedPaths = CollectDestinationProtectedRelativePaths(config);
+            foreach (string relativePath in config.ownedRelativePaths)
+            {
+                string normalizedRelativePath = NormalizeRelativePath(relativePath);
+                if (string.IsNullOrEmpty(normalizedRelativePath))
+                    continue;
+                if (destinationProtectedPaths.Contains(normalizedRelativePath))
+                    continue;
+
+                result.Add(normalizedRelativePath);
+            }
+
+            return result;
         }
 
         internal static bool NormalizeState(SyncConfig config)
