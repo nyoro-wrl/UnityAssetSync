@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Changed
+
+- Allowed nested Source/Destination paths when `Include Subdirectories` is off.
+
+### Fixed
+
+- Kept nested path safety checks active when switching `Include Subdirectories` on.
+- Remapped config source/destination paths automatically when selected folders are moved.
+
 ## [1.0.0] - 2026-04-04
 
 ### Added

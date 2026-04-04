@@ -35,33 +35,14 @@ namespace Nyorowrl.Assetfork.Editor
                 return 0;
             }
 
-            if (srcAssetPath == dstAssetPath)
+            if (TryGetConfigWarning(config, out string warning))
             {
-                Debug.LogWarning($"[AssetFork] '{config.configName}': Source and Destination are the same directory.");
+                Debug.LogWarning($"[AssetFork] '{config.configName}': {warning}");
                 return 0;
             }
 
             string srcRoot = ToFullPath(srcAssetPath);
             string dstRoot = ToFullPath(dstAssetPath);
-
-            if (PathsEqual(srcRoot, dstRoot))
-            {
-                Debug.LogWarning($"[AssetFork] '{config.configName}': Source and Destination are the same directory.");
-                return 0;
-            }
-
-            // Reject nested roots to avoid self-recursive copy (e.g. Src -> Src/Dst).
-            if (IsSubPathOf(srcRoot, dstRoot) || IsSubPathOf(dstRoot, srcRoot))
-            {
-                Debug.LogWarning($"[AssetFork] '{config.configName}': Source and Destination must not be nested.");
-                return 0;
-            }
-
-            if (!Directory.Exists(srcRoot))
-            {
-                Debug.LogWarning($"[AssetFork] '{config.configName}': Source directory does not exist: {srcRoot}");
-                return 0;
-            }
 
             Directory.CreateDirectory(dstRoot);
 
@@ -215,6 +196,39 @@ namespace Nyorowrl.Assetfork.Editor
             return ComputeMD5(srcFile) != ComputeMD5(dstFile);
         }
 
+        internal static bool TryGetConfigWarning(SyncConfig config, out string warning)
+        {
+            warning = null;
+            if (config == null || !config.enabled)
+                return false;
+            if (string.IsNullOrEmpty(config.sourcePath) || string.IsNullOrEmpty(config.destinationPath))
+                return false;
+
+            string srcRoot = ToFullPath(config.sourcePath);
+            string dstRoot = ToFullPath(config.destinationPath);
+
+            if (PathsEqual(srcRoot, dstRoot))
+            {
+                warning = "Source and Destination are the same directory.";
+                return true;
+            }
+
+            bool hasNestedRoots = AreRootsNested(srcRoot, dstRoot);
+            if (config.includeSubdirectories && hasNestedRoots)
+            {
+                warning = "Source and Destination must not be nested when Include Subdirectories is enabled.";
+                return true;
+            }
+
+            if (!Directory.Exists(srcRoot))
+            {
+                warning = $"Source directory does not exist: {srcRoot}";
+                return true;
+            }
+
+            return false;
+        }
+
         internal static bool PassesFilters(string assetPath, List<FilterCondition> filters)
         {
             if (filters == null || filters.Count == 0)
@@ -285,6 +299,24 @@ namespace Nyorowrl.Assetfork.Editor
             return candidate.StartsWith(parent, StringComparison.OrdinalIgnoreCase);
         }
 
+        private static bool AreRootsNested(string sourceRoot, string destinationRoot)
+        {
+            return IsSubPathOf(sourceRoot, destinationRoot) || IsSubPathOf(destinationRoot, sourceRoot);
+        }
+
+        internal static bool AreAssetPathsNested(string sourceAssetPath, string destinationAssetPath)
+        {
+            if (string.IsNullOrEmpty(sourceAssetPath) || string.IsNullOrEmpty(destinationAssetPath))
+                return false;
+
+            string sourceRoot = ToFullPath(sourceAssetPath);
+            string destinationRoot = ToFullPath(destinationAssetPath);
+            if (PathsEqual(sourceRoot, destinationRoot))
+                return false;
+
+            return AreRootsNested(sourceRoot, destinationRoot);
+        }
+
         private static string NormalizeFullPath(string path)
         {
             return Path.GetFullPath(path)
@@ -317,13 +349,33 @@ namespace Nyorowrl.Assetfork.Editor
                 if (settings == null)
                     continue;
 
+                bool settingsChanged = false;
                 foreach (var config in settings.syncConfigs)
                 {
+                    if (config == null)
+                        continue;
+
+                    bool sourcePathMoved = TryRemapPathByMoves(config.sourcePath, movedAssets, movedFromAssetPaths, out string remappedSourcePath);
+                    if (sourcePathMoved)
+                    {
+                        config.sourcePath = remappedSourcePath;
+                        settingsChanged = true;
+                    }
+
+                    bool destinationPathMoved = TryRemapPathByMoves(config.destinationPath, movedAssets, movedFromAssetPaths, out string remappedDestinationPath);
+                    if (destinationPathMoved)
+                    {
+                        config.destinationPath = remappedDestinationPath;
+                        settingsChanged = true;
+                    }
+
                     string srcPath = config.sourcePath;
                     if (string.IsNullOrEmpty(srcPath))
                         continue;
 
-                    bool needsSync = importedAssets.Any(p => IsAssetPathWithinScope(p, srcPath, config.includeSubdirectories))
+                    bool needsSync = sourcePathMoved
+                        || destinationPathMoved
+                        || importedAssets.Any(p => IsAssetPathWithinScope(p, srcPath, config.includeSubdirectories))
                         || deletedAssets.Any(p => IsAssetPathWithinScope(p, srcPath, config.includeSubdirectories))
                         || movedAssets.Any(p => IsAssetPathWithinScope(p, srcPath, config.includeSubdirectories))
                         || movedFromAssetPaths.Any(p => IsAssetPathWithinScope(p, srcPath, config.includeSubdirectories));
@@ -331,6 +383,9 @@ namespace Nyorowrl.Assetfork.Editor
                     if (needsSync)
                         AssetSyncer.SyncConfig(config);
                 }
+
+                if (settingsChanged)
+                    EditorUtility.SetDirty(settings);
             }
         }
 
@@ -362,6 +417,61 @@ namespace Nyorowrl.Assetfork.Editor
 
             string relative = normalizedAsset.Substring(normalizedRoot.Length + 1);
             return relative.IndexOf('/') < 0;
+        }
+
+        internal static bool TryRemapPathByMoves(
+            string currentPath,
+            string[] movedAssets,
+            string[] movedFromAssetPaths,
+            out string remappedPath)
+        {
+            remappedPath = currentPath;
+            if (string.IsNullOrEmpty(currentPath) || movedAssets == null || movedFromAssetPaths == null)
+                return false;
+
+            int pairCount = Math.Min(movedAssets.Length, movedFromAssetPaths.Length);
+            if (pairCount == 0)
+                return false;
+
+            string normalizedCurrent = NormalizeAssetPath(currentPath);
+            string bestFrom = null;
+            string bestTo = null;
+
+            for (int i = 0; i < pairCount; i++)
+            {
+                string movedTo = NormalizeAssetPath(movedAssets[i]);
+                string movedFrom = NormalizeAssetPath(movedFromAssetPaths[i]);
+
+                if (string.IsNullOrEmpty(movedFrom) || string.IsNullOrEmpty(movedTo))
+                    continue;
+                if (!AssetDatabase.IsValidFolder(movedTo))
+                    continue;
+                if (!IsAssetPathWithinRoot(normalizedCurrent, movedFrom))
+                    continue;
+
+                if (bestFrom == null || movedFrom.Length > bestFrom.Length)
+                {
+                    bestFrom = movedFrom;
+                    bestTo = movedTo;
+                }
+            }
+
+            if (bestFrom == null)
+                return false;
+
+            string suffix = normalizedCurrent.Length > bestFrom.Length
+                ? normalizedCurrent.Substring(bestFrom.Length)
+                : string.Empty;
+            remappedPath = bestTo + suffix;
+
+            return !string.Equals(remappedPath, normalizedCurrent, StringComparison.Ordinal);
+        }
+
+        private static string NormalizeAssetPath(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+                return string.Empty;
+            return path.Replace('\\', '/').TrimEnd('/');
         }
     }
 }

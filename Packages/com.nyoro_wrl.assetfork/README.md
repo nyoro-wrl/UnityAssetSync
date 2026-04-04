@@ -15,5 +15,8 @@ AssetFork is an editor-only Unity package for synchronizing assets between folde
 2. Create or assign an `AssetForkSettings` asset.
 3. Add a config and set `Source` and `Destination`.
 4. Set `Include Subdirectories` to control whether nested folders are synchronized (default: off).
+   - When this is `off`, `Source` and `Destination` are allowed to be nested.
+   - When this is `on`, nested `Source`/`Destination` pairs are rejected to prevent recursive sync.
 5. Optionally add filters by type.
 6. Asset synchronization runs automatically when source assets change.
+7. If selected source/destination folders are moved in the Project, config paths are automatically remapped.

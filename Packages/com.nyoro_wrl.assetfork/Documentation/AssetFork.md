@@ -31,11 +31,12 @@ Install this package with the Unity Package Manager.
 - Tracks synchronized files in an internal manifest under `Library/AssetFork`.
 - Deletes destination files only when they were previously synchronized by AssetFork and should no longer exist.
 - Keeps manually added destination files that were not synchronized by AssetFork.
+- If selected source or destination folders are moved, stored config paths are remapped automatically.
 
 ## Safety rules
 
 - Source and destination must be different folders.
-- Source and destination must not be nested in each other.
+- If `Include Subdirectories` is `on`, source and destination must not be nested in each other.
 
 # Technical details
 

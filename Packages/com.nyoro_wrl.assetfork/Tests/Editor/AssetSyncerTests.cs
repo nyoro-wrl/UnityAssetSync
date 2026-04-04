@@ -245,7 +245,37 @@ namespace Nyorowrl.Assetfork.Editor.Tests
         }
 
         [Test]
-        public void SyncConfig_DstNestedUnderSrc_LogsWarningAndSkips()
+        public void TryGetConfigWarning_NestedWithIncludeSubdirectories_ReturnsWarning()
+        {
+            bool hasWarning = AssetSyncer.TryGetConfigWarning(new SyncConfig
+            {
+                sourcePath = _srcAssetPath,
+                destinationPath = _srcAssetPath + "/NestedDst",
+                enabled = true,
+                includeSubdirectories = true
+            }, out string warning);
+
+            Assert.IsTrue(hasWarning);
+            StringAssert.Contains("must not be nested", warning);
+        }
+
+        [Test]
+        public void TryGetConfigWarning_NestedWithoutIncludeSubdirectories_ReturnsNoWarning()
+        {
+            bool hasWarning = AssetSyncer.TryGetConfigWarning(new SyncConfig
+            {
+                sourcePath = _srcAssetPath,
+                destinationPath = _srcAssetPath + "/NestedDst",
+                enabled = true,
+                includeSubdirectories = false
+            }, out string warning);
+
+            Assert.IsFalse(hasWarning);
+            Assert.IsNull(warning);
+        }
+
+        [Test]
+        public void SyncConfig_DstNestedUnderSrc_WithIncludeSubdirectories_LogsWarningAndSkips()
         {
             WriteSrc("file.txt", "data");
 
@@ -256,7 +286,8 @@ namespace Nyorowrl.Assetfork.Editor.Tests
             {
                 sourcePath = _srcAssetPath,
                 destinationPath = nestedDst,
-                enabled = true
+                enabled = true,
+                includeSubdirectories = true
             });
 
             Assert.AreEqual(0, copied);
@@ -265,7 +296,7 @@ namespace Nyorowrl.Assetfork.Editor.Tests
         }
 
         [Test]
-        public void SyncConfig_SrcNestedUnderDst_LogsWarningAndSkips()
+        public void SyncConfig_SrcNestedUnderDst_WithIncludeSubdirectories_LogsWarningAndSkips()
         {
             WriteSrc("file.txt", "data");
 
@@ -275,11 +306,83 @@ namespace Nyorowrl.Assetfork.Editor.Tests
             {
                 sourcePath = _srcAssetPath,
                 destinationPath = _testRoot,
-                enabled = true
+                enabled = true,
+                includeSubdirectories = true
             });
 
             Assert.AreEqual(0, copied);
             Assert.IsFalse(File.Exists(Path.Combine(Path.GetDirectoryName(Application.dataPath), _testRoot, "file.txt")));
+        }
+
+        [Test]
+        public void SyncConfig_DstNestedUnderSrc_WithoutIncludeSubdirectories_AllowsSync()
+        {
+            WriteSrc("root.txt", "root");
+            WriteSrc("sub/deep.txt", "deep");
+
+            string nestedDst = _srcAssetPath + "/NestedDst";
+            int copied = AssetSyncer.SyncConfig(new SyncConfig
+            {
+                sourcePath = _srcAssetPath,
+                destinationPath = nestedDst,
+                enabled = true,
+                includeSubdirectories = false
+            });
+
+            Assert.AreEqual(1, copied);
+            Assert.IsTrue(File.Exists(Path.Combine(_srcFullPath, "NestedDst", "root.txt")));
+            Assert.IsFalse(File.Exists(Path.Combine(_srcFullPath, "NestedDst", "sub", "deep.txt")));
+        }
+
+        [Test]
+        public void SyncConfig_SrcNestedUnderDst_WithoutIncludeSubdirectories_AllowsSync()
+        {
+            WriteSrc("root.txt", "root");
+            WriteSrc("child/file.txt", "child");
+
+            string dstRootFull = Path.Combine(Path.GetDirectoryName(Application.dataPath), _testRoot);
+            int copied = AssetSyncer.SyncConfig(new SyncConfig
+            {
+                sourcePath = _srcAssetPath,
+                destinationPath = _testRoot,
+                enabled = true,
+                includeSubdirectories = false
+            });
+
+            Assert.AreEqual(1, copied);
+            Assert.IsTrue(File.Exists(Path.Combine(dstRootFull, "root.txt")));
+            Assert.IsFalse(File.Exists(Path.Combine(dstRootFull, "child", "file.txt")));
+        }
+
+        [Test]
+        public void SyncConfig_NestedPaths_WhenIncludeSubdirectoriesToggledOn_LogsWarningAndSkips()
+        {
+            WriteSrc("root.txt", "v1");
+            string nestedDst = _srcAssetPath + "/NestedDst";
+            string nestedDstFile = Path.Combine(_srcFullPath, "NestedDst", "root.txt");
+
+            int firstCopied = AssetSyncer.SyncConfig(new SyncConfig
+            {
+                sourcePath = _srcAssetPath,
+                destinationPath = nestedDst,
+                enabled = true,
+                includeSubdirectories = false
+            });
+            Assert.AreEqual(1, firstCopied);
+            Assert.AreEqual("v1", File.ReadAllText(nestedDstFile));
+
+            WriteSrc("root.txt", "v2");
+            LogAssert.Expect(LogType.Warning, new Regex(".*must not be nested.*"));
+            int secondCopied = AssetSyncer.SyncConfig(new SyncConfig
+            {
+                sourcePath = _srcAssetPath,
+                destinationPath = nestedDst,
+                enabled = true,
+                includeSubdirectories = true
+            });
+
+            Assert.AreEqual(0, secondCopied);
+            Assert.AreEqual("v1", File.ReadAllText(nestedDstFile));
         }
 
         // ─── Phase 1: コピー (#24–32) ─────────────────────────────────
@@ -715,6 +818,20 @@ namespace Nyorowrl.Assetfork.Editor.Tests
         }
 
         [Test]
+        public void AreAssetPathsNested_NestedPair_ReturnsTrue()
+        {
+            Assert.IsTrue(AssetSyncer.AreAssetPathsNested(_srcAssetPath, _srcAssetPath + "/Nested"));
+            Assert.IsTrue(AssetSyncer.AreAssetPathsNested(_srcAssetPath + "/Nested", _srcAssetPath));
+        }
+
+        [Test]
+        public void AreAssetPathsNested_SameOrSeparatePaths_ReturnsFalse()
+        {
+            Assert.IsFalse(AssetSyncer.AreAssetPathsNested(_srcAssetPath, _srcAssetPath));
+            Assert.IsFalse(AssetSyncer.AreAssetPathsNested(_srcAssetPath, _dstAssetPath));
+        }
+
+        [Test]
         public void PostprocessorScopeMatch_IncludeSubdirectoriesFlagIsRespected()
         {
             const string root = "Assets/Foo";
@@ -724,6 +841,76 @@ namespace Nyorowrl.Assetfork.Editor.Tests
             Assert.IsFalse(AssetForkPostprocessor.IsAssetPathWithinScope("Assets/Foo/Sub/Bar.asset", root, includeSubdirectories: false));
 
             Assert.IsTrue(AssetForkPostprocessor.IsAssetPathWithinScope("Assets/Foo/Sub/Bar.asset", root, includeSubdirectories: true));
+        }
+
+        [Test]
+        public void PostprocessorTryRemapPathByMoves_ExactMatch_ReturnsRemappedPath()
+        {
+            string movedTo = _testRoot + "/Moved";
+            Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(Application.dataPath), movedTo));
+            AssetDatabase.Refresh();
+
+            bool changed = AssetForkPostprocessor.TryRemapPathByMoves(
+                _testRoot + "/BeforeMove",
+                new[] { movedTo },
+                new[] { _testRoot + "/BeforeMove" },
+                out string remappedPath);
+
+            Assert.IsTrue(changed);
+            Assert.AreEqual(movedTo, remappedPath);
+        }
+
+        [Test]
+        public void PostprocessorTryRemapPathByMoves_ChildPathUnderMovedParent_IsRemapped()
+        {
+            string movedTo = _testRoot + "/MovedParent";
+            Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(Application.dataPath), movedTo));
+            AssetDatabase.Refresh();
+
+            bool changed = AssetForkPostprocessor.TryRemapPathByMoves(
+                _testRoot + "/BeforeParent/SubDir",
+                new[] { movedTo },
+                new[] { _testRoot + "/BeforeParent" },
+                out string remappedPath);
+
+            Assert.IsTrue(changed);
+            Assert.AreEqual(movedTo + "/SubDir", remappedPath);
+        }
+
+        [Test]
+        public void PostprocessorTryRemapPathByMoves_NoMatch_ReturnsFalse()
+        {
+            string movedTo = _testRoot + "/Moved";
+            Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(Application.dataPath), movedTo));
+            AssetDatabase.Refresh();
+
+            bool changed = AssetForkPostprocessor.TryRemapPathByMoves(
+                _testRoot + "/Unchanged",
+                new[] { movedTo },
+                new[] { _testRoot + "/BeforeMove" },
+                out string remappedPath);
+
+            Assert.IsFalse(changed);
+            Assert.AreEqual(_testRoot + "/Unchanged", remappedPath);
+        }
+
+        [Test]
+        public void PostprocessorTryRemapPathByMoves_PrefersLongestMatchingPrefix()
+        {
+            string movedParent = _testRoot + "/MovedParent";
+            string movedChild = _testRoot + "/MovedChild";
+            Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(Application.dataPath), movedParent));
+            Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(Application.dataPath), movedChild));
+            AssetDatabase.Refresh();
+
+            bool changed = AssetForkPostprocessor.TryRemapPathByMoves(
+                _testRoot + "/Before/Sub/Target",
+                new[] { movedParent, movedChild },
+                new[] { _testRoot + "/Before", _testRoot + "/Before/Sub" },
+                out string remappedPath);
+
+            Assert.IsTrue(changed);
+            Assert.AreEqual(movedChild + "/Target", remappedPath);
         }
 
     }

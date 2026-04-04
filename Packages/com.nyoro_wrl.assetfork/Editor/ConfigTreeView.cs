@@ -100,13 +100,23 @@ namespace Nyorowrl.Assetfork.Editor
 
             var config = Settings.syncConfigs[args.item.id];
             Rect row = args.rowRect;
+            bool hasWarning = AssetSyncer.TryGetConfigWarning(config, out string warningMessage);
 
             if (!config.enabled) GUI.color = new Color(1, 1, 1, 0.5f);
             float labelHeight = EditorGUIUtility.singleLineHeight;
             float labelY = row.y + (row.height - labelHeight) * 0.5f;
             float labelX = row.x + 2f;
-            args.rowRect = new Rect(labelX, labelY, row.width - 4f, labelHeight);
+            float reservedRight = hasWarning ? 20f : 4f;
+            args.rowRect = new Rect(labelX, labelY, row.width - reservedRight, labelHeight);
             base.RowGUI(args);
+
+            if (hasWarning)
+            {
+                var iconContent = EditorGUIUtility.IconContent("console.warnicon.sml");
+                var iconRect = new Rect(row.xMax - 18f, row.y + (row.height - 16f) * 0.5f, 16f, 16f);
+                GUI.Label(iconRect, new GUIContent(iconContent.image, warningMessage));
+            }
+
             GUI.color = Color.white;
         }
 

@@ -203,9 +203,17 @@ namespace Nyorowrl.Assetfork.Editor
             var newSrcObj = (DefaultAsset)EditorGUILayout.ObjectField("Source", srcObj, typeof(DefaultAsset), false);
             if (newSrcObj != srcObj)
             {
-                Undo.RecordObject(_settings, "Set Source");
-                config.sourcePath = AssetDatabase.GetAssetPath(newSrcObj);
-                ApplyConfigChange(config);
+                string selectedPath = AssetDatabase.GetAssetPath(newSrcObj);
+                if (!string.IsNullOrEmpty(selectedPath) && !AssetDatabase.IsValidFolder(selectedPath))
+                {
+                    Debug.LogWarning("[AssetFork] Source must be a folder.");
+                }
+                else
+                {
+                    Undo.RecordObject(_settings, "Set Source");
+                    config.sourcePath = selectedPath;
+                    ApplyConfigChange(config);
+                }
             }
 
             var dstObj = string.IsNullOrEmpty(config.destinationPath)
@@ -213,9 +221,17 @@ namespace Nyorowrl.Assetfork.Editor
             var newDstObj = (DefaultAsset)EditorGUILayout.ObjectField("Destination", dstObj, typeof(DefaultAsset), false);
             if (newDstObj != dstObj)
             {
-                Undo.RecordObject(_settings, "Set Destination");
-                config.destinationPath = AssetDatabase.GetAssetPath(newDstObj);
-                ApplyConfigChange(config);
+                string selectedPath = AssetDatabase.GetAssetPath(newDstObj);
+                if (!string.IsNullOrEmpty(selectedPath) && !AssetDatabase.IsValidFolder(selectedPath))
+                {
+                    Debug.LogWarning("[AssetFork] Destination must be a folder.");
+                }
+                else
+                {
+                    Undo.RecordObject(_settings, "Set Destination");
+                    config.destinationPath = selectedPath;
+                    ApplyConfigChange(config);
+                }
             }
 
             EditorGUI.BeginChangeCheck();
@@ -225,6 +241,11 @@ namespace Nyorowrl.Assetfork.Editor
                 Undo.RecordObject(_settings, "Toggle Include Subdirectories");
                 config.includeSubdirectories = newIncludeSubdirectories;
                 ApplyConfigChange(config);
+            }
+
+            if (AssetSyncer.TryGetConfigWarning(config, out string warning))
+            {
+                EditorGUILayout.HelpBox(warning, MessageType.Warning);
             }
 
             EditorGUILayout.Space();
