@@ -44,6 +44,19 @@ namespace Nyorowrl.Assetfork.Editor
             string srcRoot = ToFullPath(srcAssetPath);
             string dstRoot = ToFullPath(dstAssetPath);
 
+            if (PathsEqual(srcRoot, dstRoot))
+            {
+                Debug.LogWarning($"[AssetFork] '{config.configName}': Source and Destination are the same directory.");
+                return 0;
+            }
+
+            // Reject nested roots to avoid self-recursive copy (e.g. Src -> Src/Dst).
+            if (IsSubPathOf(srcRoot, dstRoot) || IsSubPathOf(dstRoot, srcRoot))
+            {
+                Debug.LogWarning($"[AssetFork] '{config.configName}': Source and Destination must not be nested.");
+                return 0;
+            }
+
             if (!Directory.Exists(srcRoot))
             {
                 Debug.LogWarning($"[AssetFork] '{config.configName}': Source directory does not exist: {srcRoot}");
@@ -52,12 +65,24 @@ namespace Nyorowrl.Assetfork.Editor
 
             Directory.CreateDirectory(dstRoot);
 
-            int count = SyncDirectory(srcRoot, dstRoot, srcAssetPath, dstAssetPath, config.filters);
+            int count = SyncDirectory(
+                srcRoot,
+                dstRoot,
+                srcAssetPath,
+                dstAssetPath,
+                config.filters,
+                config.includeSubdirectories);
             AssetDatabase.Refresh();
             return count;
         }
 
-        private static int SyncDirectory(string srcRoot, string dstRoot, string srcAssetRoot, string dstAssetRoot, List<FilterCondition> filters)
+        private static int SyncDirectory(
+            string srcRoot,
+            string dstRoot,
+            string srcAssetRoot,
+            string dstAssetRoot,
+            List<FilterCondition> filters,
+            bool includeSubdirectories)
         {
             string manifestPath = GetManifestPath(dstAssetRoot);
             HashSet<string> manifest = LoadManifest(manifestPath);
@@ -65,7 +90,11 @@ namespace Nyorowrl.Assetfork.Editor
             int copiedCount = 0;
 
             // Phase 1: Copy new and updated files
-            string[] srcFiles = Directory.GetFiles(srcRoot, "*", SearchOption.AllDirectories)
+            SearchOption srcSearchOption = includeSubdirectories
+                ? SearchOption.AllDirectories
+                : SearchOption.TopDirectoryOnly;
+
+            string[] srcFiles = Directory.GetFiles(srcRoot, "*", srcSearchOption)
                 .Where(f => !f.EndsWith(".meta"))
                 .ToArray();
 
@@ -75,7 +104,7 @@ namespace Nyorowrl.Assetfork.Editor
                 string normalizedRel = relPath.Replace('\\', '/');
                 string assetPath = srcAssetRoot + "/" + normalizedRel;
 
-                if (!PassesFilters(assetPath, filters))
+                if (!IsWithinSyncScope(normalizedRel, includeSubdirectories) || !PassesFilters(assetPath, filters))
                     continue;
 
                 string dstFile = Path.Combine(dstRoot, relPath);
@@ -119,7 +148,8 @@ namespace Nyorowrl.Assetfork.Editor
                     else
                     {
                         string srcAssetPath = srcAssetRoot + "/" + normalizedRel;
-                        if (!PassesFilters(srcAssetPath, filters))
+                        bool inScope = IsWithinSyncScope(normalizedRel, includeSubdirectories);
+                        if (!inScope || !PassesFilters(srcAssetPath, filters))
                         {
                             // フィルタで除外 → 内容一致なら削除（同期済み）、不一致なら保護（手動変更）
                             shouldDelete = !ShouldCopy(srcFile, dstFile);
@@ -239,6 +269,36 @@ namespace Nyorowrl.Assetfork.Editor
             string projectRoot = Path.GetDirectoryName(Application.dataPath);
             return Path.GetFullPath(Path.Combine(projectRoot, assetPath));
         }
+
+        private static bool PathsEqual(string pathA, string pathB)
+        {
+            return string.Equals(
+                NormalizeFullPath(pathA),
+                NormalizeFullPath(pathB),
+                StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsSubPathOf(string parentPath, string candidatePath)
+        {
+            string parent = NormalizeFullPath(parentPath) + Path.DirectorySeparatorChar;
+            string candidate = NormalizeFullPath(candidatePath) + Path.DirectorySeparatorChar;
+            return candidate.StartsWith(parent, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string NormalizeFullPath(string path)
+        {
+            return Path.GetFullPath(path)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        }
+
+        private static bool IsWithinSyncScope(string normalizedRelativePath, bool includeSubdirectories)
+        {
+            if (includeSubdirectories)
+                return true;
+
+            return normalizedRelativePath.IndexOf('/') < 0
+                && normalizedRelativePath.IndexOf('\\') < 0;
+        }
     }
 
     public class AssetForkPostprocessor : AssetPostprocessor
@@ -263,15 +323,45 @@ namespace Nyorowrl.Assetfork.Editor
                     if (string.IsNullOrEmpty(srcPath))
                         continue;
 
-                    bool needsSync = importedAssets.Any(p => p.StartsWith(srcPath))
-                        || deletedAssets.Any(p => p.StartsWith(srcPath))
-                        || movedAssets.Any(p => p.StartsWith(srcPath))
-                        || movedFromAssetPaths.Any(p => p.StartsWith(srcPath));
+                    bool needsSync = importedAssets.Any(p => IsAssetPathWithinScope(p, srcPath, config.includeSubdirectories))
+                        || deletedAssets.Any(p => IsAssetPathWithinScope(p, srcPath, config.includeSubdirectories))
+                        || movedAssets.Any(p => IsAssetPathWithinScope(p, srcPath, config.includeSubdirectories))
+                        || movedFromAssetPaths.Any(p => IsAssetPathWithinScope(p, srcPath, config.includeSubdirectories));
 
                     if (needsSync)
                         AssetSyncer.SyncConfig(config);
                 }
             }
+        }
+
+        internal static bool IsAssetPathWithinRoot(string assetPath, string rootPath)
+        {
+            if (string.IsNullOrEmpty(assetPath) || string.IsNullOrEmpty(rootPath))
+                return false;
+
+            string normalizedAsset = assetPath.Replace('\\', '/');
+            string normalizedRoot = rootPath.Replace('\\', '/').TrimEnd('/');
+            if (normalizedAsset.Equals(normalizedRoot, StringComparison.Ordinal))
+                return true;
+
+            return normalizedAsset.StartsWith(normalizedRoot + "/", StringComparison.Ordinal);
+        }
+
+        internal static bool IsAssetPathWithinScope(string assetPath, string rootPath, bool includeSubdirectories)
+        {
+            if (!IsAssetPathWithinRoot(assetPath, rootPath))
+                return false;
+
+            if (includeSubdirectories)
+                return true;
+
+            string normalizedAsset = assetPath.Replace('\\', '/');
+            string normalizedRoot = rootPath.Replace('\\', '/').TrimEnd('/');
+            if (normalizedAsset.Equals(normalizedRoot, StringComparison.Ordinal))
+                return true;
+
+            string relative = normalizedAsset.Substring(normalizedRoot.Length + 1);
+            return relative.IndexOf('/') < 0;
         }
     }
 }

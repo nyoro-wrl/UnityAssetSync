@@ -6,6 +6,7 @@ namespace Nyorowrl.Assetfork
     public class SyncConfig
     {
         public bool enabled = true;
+        public bool includeSubdirectories = false;
         public string configName;
         public string sourcePath;
         public string destinationPath;

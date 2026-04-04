@@ -1,0 +1,13 @@
+# Unity Asset Fork
+
+フォルダから別のフォルダへアセットを一方向に同期するEditor専用パッケージです。
+.metaファイルは同期対象に含まれないため、同期先のアセットには別のインポート設定（プリセット）を適用することができます。
+アセットの同期条件は型でフィルタリングでき、必要なものだけ同期するか除外するかを選べます。
+
+## UPM インストール（Git URL + path 方式）
+
+Unity Package Manager の `Add package from git URL...` に、次の URL をそのまま入力してください。
+
+```text
+https://github.com/<owner>/<repo>.git?path=/Packages/com.nyoro_wrl.assetfork
+```

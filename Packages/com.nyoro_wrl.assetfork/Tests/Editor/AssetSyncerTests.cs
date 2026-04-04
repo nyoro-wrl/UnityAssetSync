@@ -93,12 +93,13 @@ namespace Nyorowrl.Assetfork.Editor.Tests
             return File.GetLastWriteTimeUtc(Path.Combine(_dstFullPath, relPath.Replace('/', Path.DirectorySeparatorChar)));
         }
 
-        private SyncConfig MakeConfig(List<FilterCondition> filters = null)
+        private SyncConfig MakeConfig(List<FilterCondition> filters = null, bool includeSubdirectories = true)
         {
             return new SyncConfig
             {
                 configName = "TestConfig",
                 enabled = true,
+                includeSubdirectories = includeSubdirectories,
                 sourcePath = _srcAssetPath,
                 destinationPath = _dstAssetPath,
                 filters = filters ?? new List<FilterCondition>()
@@ -243,6 +244,44 @@ namespace Nyorowrl.Assetfork.Editor.Tests
             });
         }
 
+        [Test]
+        public void SyncConfig_DstNestedUnderSrc_LogsWarningAndSkips()
+        {
+            WriteSrc("file.txt", "data");
+
+            string nestedDst = _srcAssetPath + "/NestedDst";
+            LogAssert.Expect(LogType.Warning, new Regex(".*must not be nested.*"));
+
+            int copied = AssetSyncer.SyncConfig(new SyncConfig
+            {
+                sourcePath = _srcAssetPath,
+                destinationPath = nestedDst,
+                enabled = true
+            });
+
+            Assert.AreEqual(0, copied);
+            string nestedDstFull = Path.Combine(_srcFullPath, "NestedDst", "file.txt");
+            Assert.IsFalse(File.Exists(nestedDstFull));
+        }
+
+        [Test]
+        public void SyncConfig_SrcNestedUnderDst_LogsWarningAndSkips()
+        {
+            WriteSrc("file.txt", "data");
+
+            LogAssert.Expect(LogType.Warning, new Regex(".*must not be nested.*"));
+
+            int copied = AssetSyncer.SyncConfig(new SyncConfig
+            {
+                sourcePath = _srcAssetPath,
+                destinationPath = _testRoot,
+                enabled = true
+            });
+
+            Assert.AreEqual(0, copied);
+            Assert.IsFalse(File.Exists(Path.Combine(Path.GetDirectoryName(Application.dataPath), _testRoot, "file.txt")));
+        }
+
         // ─── Phase 1: コピー (#24–32) ─────────────────────────────────
 
         // #24
@@ -318,6 +357,18 @@ namespace Nyorowrl.Assetfork.Editor.Tests
             AssetSyncer.SyncConfig(MakeConfig());
             Assert.IsTrue(DstExists("sub/deep/file.txt"));
             Assert.AreEqual("nested", ReadDst("sub/deep/file.txt"));
+        }
+
+        [Test]
+        public void Phase1_NestedSubdir_NotCopiedWhenIncludeSubdirectoriesIsFalse()
+        {
+            WriteSrc("root.txt", "root");
+            WriteSrc("sub/deep/file.txt", "nested");
+
+            AssetSyncer.SyncConfig(MakeConfig(includeSubdirectories: false));
+
+            Assert.IsTrue(DstExists("root.txt"));
+            Assert.IsFalse(DstExists("sub/deep/file.txt"));
         }
 
         // #30
@@ -651,6 +702,28 @@ namespace Nyorowrl.Assetfork.Editor.Tests
 
             Assert.IsFalse(DstExists("src-file.txt"), "filtered-out src file must not be copied");
             Assert.IsTrue(DstExists("manual.txt"), "manually placed dst file must not be deleted");
+        }
+
+        [Test]
+        public void PostprocessorPathMatch_ExactRootAndChildOnly()
+        {
+            const string root = "Assets/Foo";
+
+            Assert.IsTrue(AssetForkPostprocessor.IsAssetPathWithinRoot("Assets/Foo", root));
+            Assert.IsTrue(AssetForkPostprocessor.IsAssetPathWithinRoot("Assets/Foo/Bar.asset", root));
+            Assert.IsFalse(AssetForkPostprocessor.IsAssetPathWithinRoot("Assets/FooBar/Bar.asset", root));
+        }
+
+        [Test]
+        public void PostprocessorScopeMatch_IncludeSubdirectoriesFlagIsRespected()
+        {
+            const string root = "Assets/Foo";
+
+            Assert.IsTrue(AssetForkPostprocessor.IsAssetPathWithinScope("Assets/Foo", root, includeSubdirectories: false));
+            Assert.IsTrue(AssetForkPostprocessor.IsAssetPathWithinScope("Assets/Foo/Bar.asset", root, includeSubdirectories: false));
+            Assert.IsFalse(AssetForkPostprocessor.IsAssetPathWithinScope("Assets/Foo/Sub/Bar.asset", root, includeSubdirectories: false));
+
+            Assert.IsTrue(AssetForkPostprocessor.IsAssetPathWithinScope("Assets/Foo/Sub/Bar.asset", root, includeSubdirectories: true));
         }
 
     }

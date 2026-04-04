@@ -1,6 +1,8 @@
 {
     "name": "Nyorowrl.Assetfork",
     "references": [],
-    "includePlatforms": [],
+    "includePlatforms": [
+        "Editor"
+    ],
     "excludePlatforms": []
 }

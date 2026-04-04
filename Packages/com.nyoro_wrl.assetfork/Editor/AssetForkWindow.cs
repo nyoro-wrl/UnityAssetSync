@@ -49,19 +49,14 @@ namespace Nyorowrl.Assetfork.Editor
             _configTreeView = new ConfigTreeView(
                 _treeViewState,
                 _settings,
-                onEnabledChanged: (config, newEnabled) =>
-                {
-                    Undo.RecordObject(_settings, "Toggle Config");
-                    config.enabled = newEnabled;
-                    ApplyConfigChange(config);
-                },
                 onRenamed: (config, newName) =>
                 {
                     Undo.RecordObject(_settings, "Rename Config");
                     config.configName = newName;
                     EditorUtility.SetDirty(_settings);
                 },
-                onDeleted: DeleteConfig
+                onDeleted: DeleteConfig,
+                onAddRequested: AddConfig
             );
         }
 
@@ -76,8 +71,6 @@ namespace Nyorowrl.Assetfork.Editor
                 return;
             }
 
-            EditorGUILayout.Space();
-            DrawToolbar();
             EditorGUILayout.Space();
 
             EditorGUILayout.BeginHorizontal();
@@ -124,47 +117,30 @@ namespace Nyorowrl.Assetfork.Editor
             EditorGUILayout.EndHorizontal();
         }
 
-        private void DrawToolbar()
-        {
-            EditorGUILayout.BeginHorizontal(EditorStyles.toolbar);
-
-            var addIcon = EditorGUIUtility.IconContent("d_Toolbar Plus");
-            addIcon.tooltip = "Add Config";
-            if (GUILayout.Button(addIcon, EditorStyles.toolbarButton, GUILayout.Width(28)))
-            {
-                Undo.RecordObject(_settings, "Add Config");
-                _settings.syncConfigs.Add(new SyncConfig
-                {
-                    configName = $"Config {_settings.syncConfigs.Count + 1}"
-                });
-                EditorUtility.SetDirty(_settings);
-                int newIndex = _settings.syncConfigs.Count - 1;
-                _configTreeView.Reload();
-                _configTreeView.SelectAndBeginRename(newIndex);
-            }
-
-            EditorGUILayout.EndHorizontal();
-        }
-
         private void DrawConfigList()
         {
             EditorGUILayout.BeginVertical(GUILayout.Width(_listPanelWidth));
 
-            if (_settings.syncConfigs.Count == 0)
-            {
-                EditorGUILayout.Space();
-                GUILayout.Label("+ で設定を追加", EditorStyles.centeredGreyMiniLabel);
-            }
-            else
-            {
-                Rect treeRect = GUILayoutUtility.GetRect(
-                    _listPanelWidth, _listPanelWidth,
-                    0, float.MaxValue,
-                    GUILayout.ExpandHeight(true));
-                _configTreeView.OnGUI(treeRect);
-            }
+            Rect treeRect = GUILayoutUtility.GetRect(
+                _listPanelWidth, _listPanelWidth,
+                0, float.MaxValue,
+                GUILayout.ExpandHeight(true));
+            _configTreeView.OnGUI(treeRect);
 
             EditorGUILayout.EndVertical();
+        }
+
+        private void AddConfig()
+        {
+            Undo.RecordObject(_settings, "Add Config");
+            _settings.syncConfigs.Add(new SyncConfig
+            {
+                configName = $"Config {_settings.syncConfigs.Count + 1}"
+            });
+            EditorUtility.SetDirty(_settings);
+            int newIndex = _settings.syncConfigs.Count - 1;
+            _configTreeView.Reload();
+            _configTreeView.SelectAndBeginRename(newIndex);
         }
 
         private void DrawResizeHandle()
@@ -213,6 +189,15 @@ namespace Nyorowrl.Assetfork.Editor
 
             var config = _settings.syncConfigs[idx];
 
+            EditorGUI.BeginChangeCheck();
+            bool newEnabled = EditorGUILayout.Toggle("Enable", config.enabled);
+            if (EditorGUI.EndChangeCheck())
+            {
+                Undo.RecordObject(_settings, "Toggle Config");
+                config.enabled = newEnabled;
+                ApplyConfigChange(config);
+            }
+
             var srcObj = string.IsNullOrEmpty(config.sourcePath)
                 ? null : AssetDatabase.LoadAssetAtPath<DefaultAsset>(config.sourcePath);
             var newSrcObj = (DefaultAsset)EditorGUILayout.ObjectField("Source", srcObj, typeof(DefaultAsset), false);
@@ -230,6 +215,15 @@ namespace Nyorowrl.Assetfork.Editor
             {
                 Undo.RecordObject(_settings, "Set Destination");
                 config.destinationPath = AssetDatabase.GetAssetPath(newDstObj);
+                ApplyConfigChange(config);
+            }
+
+            EditorGUI.BeginChangeCheck();
+            bool newIncludeSubdirectories = EditorGUILayout.Toggle("Include Subdirectories", config.includeSubdirectories);
+            if (EditorGUI.EndChangeCheck())
+            {
+                Undo.RecordObject(_settings, "Toggle Include Subdirectories");
+                config.includeSubdirectories = newIncludeSubdirectories;
                 ApplyConfigChange(config);
             }
 

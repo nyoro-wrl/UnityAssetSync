@@ -9,26 +9,30 @@ namespace Nyorowrl.Assetfork.Editor
 {
     internal class ConfigTreeView : TreeView<int>
     {
+        private const int AddRowId = -2;
+        private const float ListRowHeight = 22f;
+
         public AssetForkSettings Settings { get; set; }
 
-        private readonly Action<SyncConfig, bool> _onEnabledChanged;
         private readonly Action<SyncConfig, string> _onRenamed;
         private readonly Action<int> _onDeleted;
+        private readonly Action _onAddRequested;
 
         public int SelectedIndex =>
             HasSelection() ? GetSelection()[0] : -1;
 
         public ConfigTreeView(TreeViewState<int> state, AssetForkSettings settings,
-            Action<SyncConfig, bool> onEnabledChanged, Action<SyncConfig, string> onRenamed,
-            Action<int> onDeleted)
+            Action<SyncConfig, string> onRenamed,
+            Action<int> onDeleted, Action onAddRequested)
             : base(state)
         {
             Settings = settings;
-            _onEnabledChanged = onEnabledChanged;
             _onRenamed = onRenamed;
             _onDeleted = onDeleted;
+            _onAddRequested = onAddRequested;
             showAlternatingRowBackgrounds = false;
             showBorder = true;
+            rowHeight = ListRowHeight;
             Reload();
         }
 
@@ -47,11 +51,13 @@ namespace Nyorowrl.Assetfork.Editor
                 }
             }
 
+            items.Add(new TreeViewItem<int>(AddRowId, 0, "+ Add Config"));
+
             SetupParentsAndChildrenFromDepths(root, items);
             return root;
         }
 
-        protected override bool CanRename(TreeViewItem<int> item) => true;
+        protected override bool CanRename(TreeViewItem<int> item) => item.id != AddRowId;
 
         protected override void RenameEnded(RenameEndedArgs args)
         {
@@ -73,6 +79,8 @@ namespace Nyorowrl.Assetfork.Editor
 
         protected override void ContextClickedItem(int id)
         {
+            if (id == AddRowId) return;
+
             var menu = new GenericMenu();
             menu.AddItem(new GUIContent("削除"), false, () => _onDeleted?.Invoke(id));
             menu.ShowAsContext();
@@ -80,21 +88,24 @@ namespace Nyorowrl.Assetfork.Editor
 
         protected override void RowGUI(RowGUIArgs args)
         {
+            if (args.item.id == AddRowId)
+            {
+                var addRowRect = new Rect(args.rowRect.x + 4f, args.rowRect.y + 2f, args.rowRect.width - 8f, args.rowRect.height - 4f);
+                if (GUI.Button(addRowRect, args.label, EditorStyles.miniButton))
+                    _onAddRequested?.Invoke();
+                return;
+            }
+
             if (Settings == null || args.item.id >= Settings.syncConfigs.Count) return;
 
             var config = Settings.syncConfigs[args.item.id];
             Rect row = args.rowRect;
-            float indent = GetContentIndent(args.item);
 
-            // 有効/無効トグル
-            var toggleRect = new Rect(row.x + indent, row.y + 1, 16, row.height - 2);
-            bool newEnabled = EditorGUI.Toggle(toggleRect, config.enabled);
-            if (newEnabled != config.enabled)
-                _onEnabledChanged?.Invoke(config, newEnabled);
-
-            // 名前ラベル（リネーム時はテキストフィールド）
             if (!config.enabled) GUI.color = new Color(1, 1, 1, 0.5f);
-            args.rowRect = new Rect(toggleRect.xMax + 2, row.y, row.xMax - toggleRect.xMax - 2, row.height);
+            float labelHeight = EditorGUIUtility.singleLineHeight;
+            float labelY = row.y + (row.height - labelHeight) * 0.5f;
+            float labelX = row.x + 2f;
+            args.rowRect = new Rect(labelX, labelY, row.width - 4f, labelHeight);
             base.RowGUI(args);
             GUI.color = Color.white;
         }

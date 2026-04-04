@@ -1,19 +1,14 @@
 {
 	"name": "com.nyoro_wrl.assetfork",
-	"displayName":"AssetFork",
+	"displayName": "AssetFork",
 	"version": "0.1.0",
 	"unity": "6000.3",
 	"unityRelease": "9f1",
-	"description": "Replace this with your own description of the package. \n\nFor best results, use this text to summarize: \n\u25AA What the package does \n\u25AA How it can benefit the user \n\nNote: Special formatting characters are supported, including line breaks ('\\n') and bullets ('\\u25AA').",
+	"description": "Editor-only asset synchronization tool. Mirrors files from a source folder to a destination folder and supports type-based include/exclude filters.",
 	"dependencies": {
 		"com.unity.test-framework": "1.6.0"
 	},
 	"author": {
-		"name": "nyoro_wrl",
-		"url": "http://www.example.com",
-		"email": "example@email.com"
-	},
-	"changelogUrl": "https://example.com/changelog.html",
-	"documentationUrl": "https://example.com/",
-	"licensesUrl": "https://example.com/licensing.html"
+		"name": "nyoro_wrl"
+	}
 }
