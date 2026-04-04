@@ -17,19 +17,21 @@ namespace Nyorowrl.AssetSync.Editor
         private readonly Action<SyncConfig, string> _onRenamed;
         private readonly Action<int> _onDeleted;
         private readonly Action _onAddRequested;
+        private readonly Action<int> _onSelectionChanged;
 
         public int SelectedIndex =>
             HasSelection() ? GetSelection()[0] : -1;
 
         public ConfigTreeView(TreeViewState<int> state, AssetSyncSettings settings,
             Action<SyncConfig, string> onRenamed,
-            Action<int> onDeleted, Action onAddRequested)
+            Action<int> onDeleted, Action onAddRequested, Action<int> onSelectionChanged = null)
             : base(state)
         {
             Settings = settings;
             _onRenamed = onRenamed;
             _onDeleted = onDeleted;
             _onAddRequested = onAddRequested;
+            _onSelectionChanged = onSelectionChanged;
             showAlternatingRowBackgrounds = false;
             showBorder = true;
             rowHeight = ListRowHeight;
@@ -82,8 +84,21 @@ namespace Nyorowrl.AssetSync.Editor
             if (id == AddRowId) return;
 
             var menu = new GenericMenu();
-            menu.AddItem(new GUIContent("削除"), false, () => _onDeleted?.Invoke(id));
+            menu.AddItem(new GUIContent("Remove"), false, () => _onDeleted?.Invoke(id));
             menu.ShowAsContext();
+        }
+
+        protected override void SelectionChanged(IList<int> selectedIds)
+        {
+            base.SelectionChanged(selectedIds);
+
+            int selectedId = selectedIds != null && selectedIds.Count > 0
+                ? selectedIds[0]
+                : -1;
+            if (selectedId == AddRowId)
+                selectedId = -1;
+
+            _onSelectionChanged?.Invoke(selectedId);
         }
 
         protected override void RowGUI(RowGUIArgs args)

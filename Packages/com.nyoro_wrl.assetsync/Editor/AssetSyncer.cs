@@ -611,6 +611,89 @@ namespace Nyorowrl.AssetSync.Editor
             return result;
         }
 
+        internal static HashSet<string> CollectExistingSyncedDestinationFilesForDeletedConfig(SyncConfig config)
+        {
+            var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (config == null || string.IsNullOrEmpty(config.destinationPath))
+                return result;
+
+            string dstRoot = ToFullPath(config.destinationPath);
+            HashSet<string> syncedDestinationPaths = CollectSyncedDestinationSyncRelativePaths(config);
+            foreach (string rel in syncedDestinationPaths)
+            {
+                string relSystem = NormalizedRelativePathToSystemPath(rel);
+                string dstFilePath = Path.GetFullPath(Path.Combine(dstRoot, relSystem));
+                if (File.Exists(dstFilePath))
+                    result.Add(dstFilePath);
+            }
+
+            return result;
+        }
+
+        internal static HashSet<string> CollectExistingSyncedDestinationFilesForDeletedSettings(AssetSyncSettings settings)
+        {
+            var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (settings?.syncConfigs == null || settings.syncConfigs.Count == 0)
+                return result;
+
+            foreach (var config in settings.syncConfigs)
+            {
+                if (config == null)
+                    continue;
+
+                result.UnionWith(CollectExistingSyncedDestinationFilesForDeletedConfig(config));
+            }
+
+            return result;
+        }
+
+        internal static bool RemoveSyncedFilesForDeletedConfig(SyncConfig config, bool refreshAssetDatabase = true)
+        {
+            if (config == null || string.IsNullOrEmpty(config.destinationPath))
+                return false;
+
+            HashSet<string> syncedDestinationPaths = CollectSyncedDestinationSyncRelativePaths(config);
+            if (syncedDestinationPaths.Count == 0)
+                return false;
+
+            string dstRoot = ToFullPath(config.destinationPath);
+            bool fileSystemChanged = false;
+
+            foreach (string rel in syncedDestinationPaths)
+            {
+                string relSystem = NormalizedRelativePathToSystemPath(rel);
+                string dstFilePath = Path.Combine(dstRoot, relSystem);
+                if (DeleteFileAndMeta(dstFilePath))
+                    fileSystemChanged = true;
+            }
+
+            if (refreshAssetDatabase && fileSystemChanged)
+                AssetDatabase.Refresh();
+
+            return fileSystemChanged;
+        }
+
+        internal static bool RemoveSyncedFilesForDeletedSettings(AssetSyncSettings settings)
+        {
+            if (settings?.syncConfigs == null || settings.syncConfigs.Count == 0)
+                return false;
+
+            bool fileSystemChanged = false;
+            foreach (var config in settings.syncConfigs)
+            {
+                if (config == null)
+                    continue;
+
+                if (RemoveSyncedFilesForDeletedConfig(config, refreshAssetDatabase: false))
+                    fileSystemChanged = true;
+            }
+
+            if (fileSystemChanged)
+                AssetDatabase.Refresh();
+
+            return fileSystemChanged;
+        }
+
         internal static bool NormalizeState(SyncConfig config)
         {
             if (config == null)
@@ -1012,6 +1095,101 @@ namespace Nyorowrl.AssetSync.Editor
             if (string.IsNullOrEmpty(path))
                 return string.Empty;
             return path.Replace('\\', '/').TrimEnd('/');
+        }
+    }
+
+    public class AssetSyncSettingsDeletionProcessor : AssetModificationProcessor
+    {
+        internal static Func<string, string, string, string, bool> DisplayDialogOverride;
+
+        private static AssetDeleteResult OnWillDeleteAsset(string assetPath, RemoveAssetOptions _)
+        {
+            return HandleWillDeleteAsset(assetPath);
+        }
+
+        internal static AssetDeleteResult HandleWillDeleteAsset(string assetPath)
+        {
+            HashSet<string> filesToDelete = CollectExistingSyncedDestinationFilesForDeletedSettingsAsset(assetPath);
+            if (filesToDelete.Count > 0)
+            {
+                string fileLabel = filesToDelete.Count == 1 ? "file" : "files";
+                bool approved = ShowDeleteWarningDialog(
+                    "Delete AssetSync Settings",
+                    $"Deleting this target will also delete {filesToDelete.Count} synced destination {fileLabel}.{Environment.NewLine}{Environment.NewLine}Continue?");
+                if (!approved)
+                    return AssetDeleteResult.FailedDelete;
+            }
+
+            TryCleanupSyncedFilesFromDeletedSettingsAsset(assetPath);
+            return AssetDeleteResult.DidNotDelete;
+        }
+
+        internal static bool TryCleanupSyncedFilesFromDeletedSettingsAsset(string assetPath)
+        {
+            if (string.IsNullOrEmpty(assetPath))
+                return false;
+
+            if (AssetDatabase.IsValidFolder(assetPath))
+            {
+                bool changed = false;
+                string[] settingsGuids = AssetDatabase.FindAssets("t:AssetSyncSettings", new[] { assetPath });
+                foreach (string guid in settingsGuids)
+                {
+                    string settingsPath = AssetDatabase.GUIDToAssetPath(guid);
+                    var settings = AssetDatabase.LoadAssetAtPath<AssetSyncSettings>(settingsPath);
+                    if (settings == null)
+                        continue;
+
+                    if (AssetSyncer.RemoveSyncedFilesForDeletedSettings(settings))
+                        changed = true;
+                }
+
+                return changed;
+            }
+
+            var singleSettings = AssetDatabase.LoadAssetAtPath<AssetSyncSettings>(assetPath);
+            if (singleSettings == null)
+                return false;
+
+            return AssetSyncer.RemoveSyncedFilesForDeletedSettings(singleSettings);
+        }
+
+        internal static HashSet<string> CollectExistingSyncedDestinationFilesForDeletedSettingsAsset(string assetPath)
+        {
+            var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (string.IsNullOrEmpty(assetPath))
+                return result;
+
+            if (AssetDatabase.IsValidFolder(assetPath))
+            {
+                string[] settingsGuids = AssetDatabase.FindAssets("t:AssetSyncSettings", new[] { assetPath });
+                foreach (string guid in settingsGuids)
+                {
+                    string settingsPath = AssetDatabase.GUIDToAssetPath(guid);
+                    var settings = AssetDatabase.LoadAssetAtPath<AssetSyncSettings>(settingsPath);
+                    if (settings == null)
+                        continue;
+
+                    result.UnionWith(AssetSyncer.CollectExistingSyncedDestinationFilesForDeletedSettings(settings));
+                }
+
+                return result;
+            }
+
+            var singleSettings = AssetDatabase.LoadAssetAtPath<AssetSyncSettings>(assetPath);
+            if (singleSettings == null)
+                return result;
+
+            result.UnionWith(AssetSyncer.CollectExistingSyncedDestinationFilesForDeletedSettings(singleSettings));
+            return result;
+        }
+
+        private static bool ShowDeleteWarningDialog(string title, string message)
+        {
+            if (DisplayDialogOverride != null)
+                return DisplayDialogOverride(title, message, "Delete", "Cancel");
+
+            return EditorUtility.DisplayDialog(title, message, "Delete", "Cancel");
         }
     }
 }

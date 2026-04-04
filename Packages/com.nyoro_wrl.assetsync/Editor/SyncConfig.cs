@@ -5,7 +5,8 @@ namespace Nyorowrl.AssetSync
     [System.Serializable]
     public class SyncConfig
     {
-        public bool enabled = true;
+        public bool enabled = false;
+        public bool isSyncActivated = false;
         public bool includeSubdirectories = false;
         public string configName;
         public string sourcePath;

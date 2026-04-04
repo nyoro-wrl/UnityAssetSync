@@ -11,6 +11,8 @@ namespace Nyorowrl.AssetSync.Editor
     public class AssetSyncWindow : EditorWindow
     {
         private const string SettingsPathPrefKey = "AssetSync.SettingsPath";
+        private const string SelectedConfigIndexPrefKeyPrefix = "AssetSync.SelectedConfigIndex.";
+        internal static Func<string, string, string, string, bool> DisplayDialogOverride;
 
         private AssetSyncSettings _settings;
         private Vector2 _detailScrollPosition;
@@ -47,6 +49,7 @@ namespace Nyorowrl.AssetSync.Editor
                 _settings = AssetDatabase.LoadAssetAtPath<AssetSyncSettings>(savedPath);
 
             RebuildTreeView();
+            RestoreOrInitializeConfigSelection();
         }
 
         private void RebuildTreeView()
@@ -61,7 +64,8 @@ namespace Nyorowrl.AssetSync.Editor
                     EditorUtility.SetDirty(_settings);
                 },
                 onDeleted: DeleteConfig,
-                onAddRequested: AddConfig
+                onAddRequested: AddConfig,
+                onSelectionChanged: SaveSelectedConfigIndex
             );
         }
 
@@ -106,6 +110,7 @@ namespace Nyorowrl.AssetSync.Editor
                     string path = _settings != null ? AssetDatabase.GetAssetPath(_settings) : "";
                     EditorPrefs.SetString(SettingsPathPrefKey, path);
                     RebuildTreeView();
+                    RestoreOrInitializeConfigSelection();
                 }
 
                 if (GUILayout.Button("New", GUILayout.Width(50)))
@@ -126,6 +131,7 @@ namespace Nyorowrl.AssetSync.Editor
                         _ignoreLists.Clear();
                         EditorPrefs.SetString(SettingsPathPrefKey, path);
                         RebuildTreeView();
+                        RestoreOrInitializeConfigSelection();
                     }
                 }
             }
@@ -150,12 +156,15 @@ namespace Nyorowrl.AssetSync.Editor
             Undo.RecordObject(_settings, "Add Config");
             _settings.syncConfigs.Add(new SyncConfig
             {
-                configName = $"Config {_settings.syncConfigs.Count + 1}"
+                configName = $"Config {_settings.syncConfigs.Count + 1}",
+                enabled = false,
+                isSyncActivated = false
             });
             EditorUtility.SetDirty(_settings);
             int newIndex = _settings.syncConfigs.Count - 1;
             _configTreeView.Reload();
             _configTreeView.SelectAndBeginRename(newIndex);
+            SaveSelectedConfigIndex(newIndex);
         }
 
         private void DrawResizeHandle()
@@ -191,83 +200,120 @@ namespace Nyorowrl.AssetSync.Editor
         private void DrawConfigDetail()
         {
             using (new EditorGUILayout.VerticalScope())
-            using (var scrollView = new EditorGUILayout.ScrollViewScope(_detailScrollPosition))
             {
-                _detailScrollPosition = scrollView.scrollPosition;
-
                 int idx = SelectedConfigIndex;
                 if (idx < 0 || idx >= _settings.syncConfigs.Count)
                 {
+                    GUILayout.FlexibleSpace();
                     GUILayout.Label("Select a config from the list.", EditorStyles.centeredGreyMiniLabel);
+                    GUILayout.FlexibleSpace();
                     return;
                 }
 
                 var config = _settings.syncConfigs[idx];
                 EnsureConfigCollections(config);
+                EnsureActivationState(config);
 
-                EditorGUI.BeginChangeCheck();
-                bool newEnabled = EditorGUILayout.Toggle("Enable", config.enabled);
-                if (EditorGUI.EndChangeCheck())
+                using (var scrollView = new EditorGUILayout.ScrollViewScope(_detailScrollPosition, GUILayout.ExpandHeight(true)))
                 {
-                    Undo.RecordObject(_settings, "Toggle Config");
-                    config.enabled = newEnabled;
-                    ApplyEnableStateChange(config);
-                }
+                    _detailScrollPosition = scrollView.scrollPosition;
 
-                var srcObj = string.IsNullOrEmpty(config.sourcePath)
-                    ? null : AssetDatabase.LoadAssetAtPath<DefaultAsset>(config.sourcePath);
-                var newSrcObj = (DefaultAsset)EditorGUILayout.ObjectField("Source", srcObj, typeof(DefaultAsset), false);
-                if (newSrcObj != srcObj)
-                {
-                    string selectedPath = AssetDatabase.GetAssetPath(newSrcObj);
-                    if (!string.IsNullOrEmpty(selectedPath) && !AssetDatabase.IsValidFolder(selectedPath))
+                    if (config.isSyncActivated)
                     {
-                        Debug.LogWarning("[AssetSync] Source must be a folder.");
+                        using (new EditorGUI.DisabledScope(!CanInteractWithEnableToggle(config)))
+                        {
+                            EditorGUI.BeginChangeCheck();
+                            bool newEnabled = EditorGUILayout.Toggle("Enable", config.enabled);
+                            if (EditorGUI.EndChangeCheck())
+                            {
+                                if (newEnabled && !CanActivateWithSyncButton(config))
+                                    newEnabled = false;
+
+                                if (newEnabled != config.enabled)
+                                {
+                                    Undo.RecordObject(_settings, "Toggle Config");
+                                    config.enabled = newEnabled;
+                                    ApplyEnableStateChange(config);
+                                }
+                            }
+                        }
                     }
-                    else
+
+                    bool sourceDestinationReadOnly = IsSourceAndDestinationReadOnly(config);
+                    using (new EditorGUI.DisabledScope(sourceDestinationReadOnly))
                     {
-                        Undo.RecordObject(_settings, "Set Source");
-                        config.sourcePath = selectedPath;
+                        bool sourceIsValid = IsFolderSelectionValid(config.sourcePath);
+                        bool destinationIsValid = IsFolderSelectionValid(config.destinationPath);
+
+                        var srcObj = string.IsNullOrEmpty(config.sourcePath)
+                            ? null : AssetDatabase.LoadAssetAtPath<DefaultAsset>(config.sourcePath);
+                        Color previousBackgroundColor = GUI.backgroundColor;
+                        if (!sourceIsValid)
+                            GUI.backgroundColor = Color.red;
+                        var newSrcObj = (DefaultAsset)EditorGUILayout.ObjectField("Source", srcObj, typeof(DefaultAsset), false);
+                        GUI.backgroundColor = previousBackgroundColor;
+                        if (newSrcObj != srcObj)
+                        {
+                            string selectedPath = AssetDatabase.GetAssetPath(newSrcObj);
+                            if (!string.IsNullOrEmpty(selectedPath) && !AssetDatabase.IsValidFolder(selectedPath))
+                            {
+                                Debug.LogWarning("[AssetSync] Source must be a folder.");
+                            }
+                            else
+                            {
+                                Undo.RecordObject(_settings, "Set Source");
+                                config.sourcePath = selectedPath;
+                                ApplyConfigChange(config);
+                            }
+                        }
+
+                        var dstObj = string.IsNullOrEmpty(config.destinationPath)
+                            ? null : AssetDatabase.LoadAssetAtPath<DefaultAsset>(config.destinationPath);
+                        previousBackgroundColor = GUI.backgroundColor;
+                        if (!destinationIsValid)
+                            GUI.backgroundColor = Color.red;
+                        var newDstObj = (DefaultAsset)EditorGUILayout.ObjectField("Destination", dstObj, typeof(DefaultAsset), false);
+                        GUI.backgroundColor = previousBackgroundColor;
+                        if (newDstObj != dstObj)
+                        {
+                            string selectedPath = AssetDatabase.GetAssetPath(newDstObj);
+                            if (!string.IsNullOrEmpty(selectedPath) && !AssetDatabase.IsValidFolder(selectedPath))
+                            {
+                                Debug.LogWarning("[AssetSync] Destination must be a folder.");
+                            }
+                            else
+                            {
+                                Undo.RecordObject(_settings, "Set Destination");
+                                config.destinationPath = selectedPath;
+                                ApplyConfigChange(config);
+                            }
+                        }
+                    }
+
+                    EditorGUI.BeginChangeCheck();
+                    bool newIncludeSubdirectories = EditorGUILayout.Toggle("Include Subdirectories", config.includeSubdirectories);
+                    if (EditorGUI.EndChangeCheck())
+                    {
+                        Undo.RecordObject(_settings, "Toggle Include Subdirectories");
+                        config.includeSubdirectories = newIncludeSubdirectories;
                         ApplyConfigChange(config);
                     }
-                }
 
-                var dstObj = string.IsNullOrEmpty(config.destinationPath)
-                    ? null : AssetDatabase.LoadAssetAtPath<DefaultAsset>(config.destinationPath);
-                var newDstObj = (DefaultAsset)EditorGUILayout.ObjectField("Destination", dstObj, typeof(DefaultAsset), false);
-                if (newDstObj != dstObj)
-                {
-                    string selectedPath = AssetDatabase.GetAssetPath(newDstObj);
-                    if (!string.IsNullOrEmpty(selectedPath) && !AssetDatabase.IsValidFolder(selectedPath))
+                    if (TryGetConfigWarningForDisplay(config, out string warning))
                     {
-                        Debug.LogWarning("[AssetSync] Destination must be a folder.");
+                        EditorGUILayout.HelpBox(warning, MessageType.Warning);
                     }
-                    else
-                    {
-                        Undo.RecordObject(_settings, "Set Destination");
-                        config.destinationPath = selectedPath;
-                        ApplyConfigChange(config);
-                    }
+
+                    EditorGUILayout.Space();
+                    DrawFilterList(config);
+                    EditorGUILayout.Space();
+                    DrawIgnoreList(config);
                 }
 
-                EditorGUI.BeginChangeCheck();
-                bool newIncludeSubdirectories = EditorGUILayout.Toggle("Include Subdirectories", config.includeSubdirectories);
-                if (EditorGUI.EndChangeCheck())
+                if (!config.isSyncActivated)
                 {
-                    Undo.RecordObject(_settings, "Toggle Include Subdirectories");
-                    config.includeSubdirectories = newIncludeSubdirectories;
-                    ApplyConfigChange(config);
+                    DrawSyncActivationButton(config);
                 }
-
-                if (AssetSyncer.TryGetConfigWarning(config, out string warning))
-                {
-                    EditorGUILayout.HelpBox(warning, MessageType.Warning);
-                }
-
-                EditorGUILayout.Space();
-                DrawFilterList(config);
-                EditorGUILayout.Space();
-                DrawIgnoreList(config);
             }
         }
 
@@ -496,6 +542,20 @@ namespace Nyorowrl.AssetSync.Editor
         {
             if (_settings == null || idx < 0 || idx >= _settings.syncConfigs.Count) return;
 
+            var config = _settings.syncConfigs[idx];
+            HashSet<string> filesToDelete = AssetSyncer.CollectExistingSyncedDestinationFilesForDeletedConfig(config);
+            if (filesToDelete.Count > 0)
+            {
+                string fileLabel = filesToDelete.Count == 1 ? "file" : "files";
+                bool approved = ShowDeleteWarningDialog(
+                    "Remove Config",
+                    $"Removing this config will also delete {filesToDelete.Count} synced destination {fileLabel}.{Environment.NewLine}{Environment.NewLine}Continue?");
+                if (!approved)
+                    return;
+            }
+
+            AssetSyncer.RemoveSyncedFilesForDeletedConfig(config);
+
             Undo.RecordObject(_settings, "Delete Config");
             _settings.syncConfigs.RemoveAt(idx);
             EditorUtility.SetDirty(_settings);
@@ -505,9 +565,173 @@ namespace Nyorowrl.AssetSync.Editor
             _configTreeView.Reload();
             int next = Mathf.Clamp(idx - 1, 0, _settings.syncConfigs.Count - 1);
             if (_settings.syncConfigs.Count > 0)
+            {
                 _configTreeView.SetSelection(new[] { next }, TreeViewSelectionOptions.RevealAndFrame);
+                SaveSelectedConfigIndex(next);
+            }
             else
+            {
                 _configTreeView.SetSelection(new List<int>());
+                SaveSelectedConfigIndex(-1);
+            }
+        }
+
+        private void RestoreOrInitializeConfigSelection()
+        {
+            if (_settings == null || _configTreeView == null || _settings.syncConfigs == null || _settings.syncConfigs.Count == 0)
+                return;
+
+            int rememberedIndex = GetRememberedConfigIndex();
+            _configTreeView.SetSelection(new[] { rememberedIndex }, TreeViewSelectionOptions.RevealAndFrame);
+        }
+
+        private int GetRememberedConfigIndex()
+        {
+            if (_settings?.syncConfigs == null || _settings.syncConfigs.Count == 0)
+                return -1;
+
+            string selectionKey = GetSelectedConfigIndexPrefKey();
+            int rememberedIndex = string.IsNullOrEmpty(selectionKey)
+                ? 0
+                : EditorPrefs.GetInt(selectionKey, 0);
+
+            return Mathf.Clamp(rememberedIndex, 0, _settings.syncConfigs.Count - 1);
+        }
+
+        private string GetSelectedConfigIndexPrefKey()
+        {
+            if (_settings == null)
+                return null;
+
+            string settingsPath = AssetDatabase.GetAssetPath(_settings);
+            if (string.IsNullOrEmpty(settingsPath))
+                return null;
+
+            return SelectedConfigIndexPrefKeyPrefix + settingsPath;
+        }
+
+        private void SaveSelectedConfigIndex(int selectedIndex)
+        {
+            string selectionKey = GetSelectedConfigIndexPrefKey();
+            if (string.IsNullOrEmpty(selectionKey))
+                return;
+
+            if (_settings?.syncConfigs == null
+                || _settings.syncConfigs.Count == 0
+                || selectedIndex < 0
+                || selectedIndex >= _settings.syncConfigs.Count)
+            {
+                EditorPrefs.DeleteKey(selectionKey);
+                return;
+            }
+
+            EditorPrefs.SetInt(selectionKey, selectedIndex);
+        }
+
+        private static bool ShowDeleteWarningDialog(string title, string message)
+        {
+            if (DisplayDialogOverride != null)
+                return DisplayDialogOverride(title, message, "Remove", "Cancel");
+
+            return EditorUtility.DisplayDialog(title, message, "Remove", "Cancel");
+        }
+
+        private void DrawSyncActivationButton(SyncConfig config)
+        {
+            GUILayout.Space(6f);
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                GUILayout.FlexibleSpace();
+                using (new EditorGUI.DisabledScope(!CanActivateWithSyncButton(config)))
+                {
+                    if (GUILayout.Button("Sync", GUILayout.Width(96f), GUILayout.Height(28f)))
+                        ActivateConfigWithSyncButton(config);
+                }
+            }
+            GUILayout.Space(2f);
+        }
+
+        private void ActivateConfigWithSyncButton(SyncConfig config)
+        {
+            if (_settings == null || config == null || !CanActivateWithSyncButton(config))
+                return;
+
+            Undo.RecordObject(_settings, "Activate Config Sync");
+            config.isSyncActivated = true;
+            config.enabled = true;
+            ApplyEnableStateChange(config);
+        }
+
+        private void EnsureActivationState(SyncConfig config)
+        {
+            if (_settings == null || config == null)
+                return;
+
+            bool shouldActivate = config.isSyncActivated
+                || config.enabled
+                || (config.syncRelativePaths != null && config.syncRelativePaths.Count > 0);
+            if (shouldActivate == config.isSyncActivated)
+                return;
+
+            config.isSyncActivated = shouldActivate;
+            EditorUtility.SetDirty(_settings);
+        }
+
+        private static bool CanActivateWithSyncButton(SyncConfig config)
+        {
+            if (config == null)
+                return false;
+            if (string.IsNullOrEmpty(config.sourcePath) || string.IsNullOrEmpty(config.destinationPath))
+                return false;
+            if (!AssetDatabase.IsValidFolder(config.sourcePath) || !AssetDatabase.IsValidFolder(config.destinationPath))
+                return false;
+
+            return !TryGetConfigWarningForActivation(config, out _);
+        }
+
+        private static bool IsSourceAndDestinationReadOnly(SyncConfig config)
+        {
+            return config != null && config.isSyncActivated && config.enabled;
+        }
+
+        private static bool CanInteractWithEnableToggle(SyncConfig config)
+        {
+            if (config == null)
+                return false;
+
+            return config.enabled || CanActivateWithSyncButton(config);
+        }
+
+        private static bool IsFolderSelectionValid(string assetPath)
+        {
+            return !string.IsNullOrEmpty(assetPath) && AssetDatabase.IsValidFolder(assetPath);
+        }
+
+        private static bool TryGetConfigWarningForDisplay(SyncConfig config, out string warning)
+        {
+            if (config == null)
+            {
+                warning = null;
+                return false;
+            }
+
+            if (config.enabled)
+                return AssetSyncer.TryGetConfigWarning(config, out warning);
+
+            return TryGetConfigWarningForActivation(config, out warning);
+        }
+
+        private static bool TryGetConfigWarningForActivation(SyncConfig config, out string warning)
+        {
+            var probe = new SyncConfig
+            {
+                configName = config?.configName,
+                enabled = true,
+                includeSubdirectories = config?.includeSubdirectories ?? false,
+                sourcePath = config?.sourcePath,
+                destinationPath = config?.destinationPath
+            };
+            return AssetSyncer.TryGetConfigWarning(probe, out warning);
         }
 
         private void ApplyConfigChange(SyncConfig config)

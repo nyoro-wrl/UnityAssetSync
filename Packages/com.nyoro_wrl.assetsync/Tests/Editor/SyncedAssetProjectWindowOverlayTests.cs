@@ -33,11 +33,13 @@ namespace Nyorowrl.AssetSync.Editor.Tests
         [TearDown]
         public void TearDown()
         {
+            AssetSyncSettingsDeletionProcessor.DisplayDialogOverride = (_, _, _, _) => true;
             string projectRoot = Path.GetDirectoryName(Application.dataPath);
             string fullTestRoot = Path.GetFullPath(Path.Combine(projectRoot, _testRoot));
             FileUtil.DeleteFileOrDirectory(fullTestRoot);
             FileUtil.DeleteFileOrDirectory(fullTestRoot + ".meta");
             AssetDatabase.Refresh();
+            AssetSyncSettingsDeletionProcessor.DisplayDialogOverride = null;
         }
 
         [Test]
