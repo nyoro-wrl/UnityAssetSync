@@ -21,6 +21,8 @@ namespace Nyorowrl.Assetfork.Editor
 
         private readonly Dictionary<FilterCondition, ReorderableList> _typesLists =
             new Dictionary<FilterCondition, ReorderableList>();
+        private readonly Dictionary<SyncConfig, ReorderableList> _protectedLists =
+            new Dictionary<SyncConfig, ReorderableList>();
 
         private int SelectedConfigIndex => _configTreeView?.SelectedIndex ?? -1;
 
@@ -89,6 +91,7 @@ namespace Nyorowrl.Assetfork.Editor
             if (EditorGUI.EndChangeCheck())
             {
                 _typesLists.Clear();
+                _protectedLists.Clear();
                 string path = _settings != null ? AssetDatabase.GetAssetPath(_settings) : "";
                 EditorPrefs.SetString(SettingsPathPrefKey, path);
                 RebuildTreeView();
@@ -109,6 +112,7 @@ namespace Nyorowrl.Assetfork.Editor
                     AssetDatabase.SaveAssets();
                     _settings = newSettings;
                     _typesLists.Clear();
+                    _protectedLists.Clear();
                     EditorPrefs.SetString(SettingsPathPrefKey, path);
                     RebuildTreeView();
                 }
@@ -354,60 +358,7 @@ namespace Nyorowrl.Assetfork.Editor
         private void DrawProtectedList(SyncConfig config)
         {
             config.protectedGuids ??= new List<string>();
-
-            EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("Protected Assets", EditorStyles.boldLabel);
-            GUILayout.FlexibleSpace();
-            var addIcon = EditorGUIUtility.IconContent("d_Toolbar Plus");
-            addIcon.tooltip = "Add Protected Asset";
-            if (GUILayout.Button(addIcon, EditorStyles.iconButton))
-            {
-                Undo.RecordObject(_settings, "Add Protected Asset");
-                config.protectedGuids.Add(string.Empty);
-                ApplyConfigChange(config);
-            }
-            EditorGUILayout.EndHorizontal();
-
-            int deleteIndex = -1;
-            for (int i = 0; i < config.protectedGuids.Count; i++)
-                DrawProtectedEntry(config, i, ref deleteIndex);
-
-            if (deleteIndex >= 0)
-            {
-                Undo.RecordObject(_settings, "Delete Protected Asset");
-                config.protectedGuids.RemoveAt(deleteIndex);
-                ApplyConfigChange(config);
-            }
-        }
-
-        private void DrawProtectedEntry(SyncConfig config, int index, ref int deleteIndex)
-        {
-            string guid = config.protectedGuids[index];
-            string path = AssetDatabase.GUIDToAssetPath(guid);
-            UnityEngine.Object current = string.IsNullOrEmpty(path)
-                ? null
-                : AssetDatabase.LoadMainAssetAtPath(path);
-
-            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-            EditorGUILayout.BeginHorizontal();
-            var next = EditorGUILayout.ObjectField($"Asset {index + 1}", current, typeof(UnityEngine.Object), false);
-            if (next != current)
-            {
-                Undo.RecordObject(_settings, "Change Protected Asset");
-                string nextPath = AssetDatabase.GetAssetPath(next);
-                config.protectedGuids[index] = string.IsNullOrEmpty(nextPath)
-                    ? string.Empty
-                    : AssetDatabase.AssetPathToGUID(nextPath);
-                ApplyConfigChange(config);
-            }
-
-            var deleteIcon = EditorGUIUtility.IconContent("CrossIcon");
-            deleteIcon.tooltip = "Delete";
-            if (GUILayout.Button(deleteIcon, EditorStyles.iconButton))
-                deleteIndex = index;
-            EditorGUILayout.EndHorizontal();
-
-            EditorGUILayout.EndVertical();
+            GetOrCreateProtectedList(config).DoLayoutList();
         }
 
         private ReorderableList GetOrCreateTypesList(FilterCondition filter, SyncConfig config)
@@ -462,6 +413,65 @@ namespace Nyorowrl.Assetfork.Editor
             return list;
         }
 
+        private ReorderableList GetOrCreateProtectedList(SyncConfig config)
+        {
+            if (_protectedLists.TryGetValue(config, out var existing))
+                return existing;
+
+            config.protectedGuids ??= new List<string>();
+
+            var list = new ReorderableList(config.protectedGuids, typeof(string),
+                draggable: true, displayHeader: true, displayAddButton: true, displayRemoveButton: true);
+
+            list.drawHeaderCallback = rect => EditorGUI.LabelField(rect, "Protected Assets");
+            list.elementHeight = EditorGUIUtility.singleLineHeight + 2;
+
+            list.drawElementCallback = (rect, index, isActive, isFocused) =>
+            {
+                if (index < 0 || index >= config.protectedGuids.Count)
+                    return;
+
+                string guid = config.protectedGuids[index];
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                UnityEngine.Object current = string.IsNullOrEmpty(path)
+                    ? null
+                    : AssetDatabase.LoadMainAssetAtPath(path);
+
+                var fieldRect = new Rect(rect.x, rect.y + 1, rect.width, EditorGUIUtility.singleLineHeight);
+                EditorGUI.BeginChangeCheck();
+                var next = EditorGUI.ObjectField(fieldRect, $"Element {index}", current, typeof(UnityEngine.Object), false);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    Undo.RecordObject(_settings, "Change Protected Asset");
+                    string nextPath = AssetDatabase.GetAssetPath(next);
+                    config.protectedGuids[index] = string.IsNullOrEmpty(nextPath)
+                        ? string.Empty
+                        : AssetDatabase.AssetPathToGUID(nextPath);
+                    ApplyConfigChange(config);
+                }
+            };
+
+            list.onAddCallback = _ =>
+            {
+                Undo.RecordObject(_settings, "Add Protected Asset");
+                config.protectedGuids.Add(string.Empty);
+                ApplyConfigChange(config);
+            };
+
+            list.onRemoveCallback = _ =>
+            {
+                if (list.index < 0 || list.index >= config.protectedGuids.Count)
+                    return;
+
+                Undo.RecordObject(_settings, "Delete Protected Asset");
+                config.protectedGuids.RemoveAt(list.index);
+                ApplyConfigChange(config);
+            };
+
+            _protectedLists[config] = list;
+            return list;
+        }
+
         private void DeleteConfig(int idx)
         {
             if (_settings == null || idx < 0 || idx >= _settings.syncConfigs.Count) return;
@@ -470,6 +480,7 @@ namespace Nyorowrl.Assetfork.Editor
             _settings.syncConfigs.RemoveAt(idx);
             EditorUtility.SetDirty(_settings);
             _typesLists.Clear();
+            _protectedLists.Clear();
 
             _configTreeView.Reload();
             int next = Mathf.Clamp(idx - 1, 0, _settings.syncConfigs.Count - 1);
