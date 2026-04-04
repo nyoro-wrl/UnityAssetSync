@@ -109,6 +109,9 @@ namespace Nyorowrl.Assetfork.Editor.Tests
                 MethodInfo applyEnableStateChangeMethod = typeof(AssetForkWindow).GetMethod("ApplyEnableStateChange", BindingFlags.NonPublic | BindingFlags.Instance);
                 Assert.IsNotNull(applyEnableStateChangeMethod, "ApplyEnableStateChange method not found");
                 applyEnableStateChangeMethod.Invoke(window, new object[] { config });
+                MethodInfo flushDeferredSyncActionsMethod = typeof(AssetForkWindow).GetMethod("FlushDeferredSyncActions", BindingFlags.NonPublic | BindingFlags.Instance);
+                Assert.IsNotNull(flushDeferredSyncActionsMethod, "FlushDeferredSyncActions method not found");
+                flushDeferredSyncActionsMethod.Invoke(window, null);
 
                 Assert.Greater(conflictDialogCalls, 0, "enabling after unprotecting while disabled should trigger conflict");
                 Assert.IsTrue(File.Exists(dstFilePath), "conflict resolution should not delete destination file");
