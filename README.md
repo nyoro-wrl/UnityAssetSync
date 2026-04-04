@@ -1,6 +1,9 @@
+![Unity Asset Sync](Packages/com.nyoro_wrl.assetsync/Editor/Icons/icon.png)
+
 # Unity Asset Sync
 
-フォルダから別のフォルダに、`.meta`ファイル以外のファイルを一方向で同期するEditor専用パッケージ。  
+フォルダから別のフォルダに、`.meta`ファイル以外のファイルを一方向で同期するEditor専用パッケージ。
+
 1つのアセットを元に、異なるプリセットを複数用意するなどの使い道があります。
 
 ## インストール
