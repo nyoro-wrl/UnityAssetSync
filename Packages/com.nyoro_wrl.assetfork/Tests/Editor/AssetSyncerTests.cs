@@ -1,8 +1,6 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.RegularExpressions;
 using NUnit.Framework;
 using UnityEditor;
@@ -35,25 +33,31 @@ namespace Nyorowrl.Assetfork.Editor.Tests
 
             Directory.CreateDirectory(_srcFullPath);
             Directory.CreateDirectory(_dstFullPath);
+
+            AssetSyncer.ConflictResolverOverride = (SyncConfig _, IReadOnlyList<AssetSyncer.SyncConflict> conflicts, out Dictionary<string, AssetSyncer.ConflictResolution> decisions) =>
+            {
+                decisions = new Dictionary<string, AssetSyncer.ConflictResolution>();
+                foreach (var conflict in conflicts)
+                    decisions[conflict.NormalizedRelativePath] = AssetSyncer.ConflictResolution.Protected;
+                return true;
+            };
         }
 
         [TearDown]
         public void TearDown()
         {
-            string manifestPath = ManifestFilePath(_dstAssetPath);
-            if (File.Exists(manifestPath))
-                File.Delete(manifestPath);
 
-            // AssetDatabase.DeleteAsset はフォルダが未登録だと失敗するため、
-            // FileUtil で直接削除してから Refresh する
+            // AssetDatabase.DeleteAsset 縺ｯ繝輔か繝ｫ繝縺梧悴逋ｻ骭ｲ縺縺ｨ螟ｱ謨励☆繧九◆繧√・
+            // FileUtil 縺ｧ逶ｴ謗･蜑企勁縺励※縺九ｉ Refresh 縺吶ｋ
             string projectRoot = Path.GetDirectoryName(Application.dataPath);
             string fullTestRoot = Path.GetFullPath(Path.Combine(projectRoot, _testRoot));
             FileUtil.DeleteFileOrDirectory(fullTestRoot);
             FileUtil.DeleteFileOrDirectory(fullTestRoot + ".meta");
             AssetDatabase.Refresh();
+            AssetSyncer.ConflictResolverOverride = null;
         }
 
-        // ─── Helpers ──────────────────────────────────────────────────
+        // 笏笏笏 Helpers 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
 
         private void WriteSrc(string relPath, string content = "test")
         {
@@ -73,7 +77,7 @@ namespace Nyorowrl.Assetfork.Editor.Tests
         {
             string full = Path.Combine(_srcFullPath, relPath.Replace('/', Path.DirectorySeparatorChar));
             if (File.Exists(full)) File.Delete(full);
-            // SyncConfig の Refresh でインポート済みの .meta も削除しないと孤立 .meta 警告が出る
+            // SyncConfig 縺ｮ Refresh 縺ｧ繧､繝ｳ繝昴・繝域ｸ医∩縺ｮ .meta 繧ょ炎髯､縺励↑縺・→蟄､遶・.meta 隴ｦ蜻翫′蜃ｺ繧・
             string meta = full + ".meta";
             if (File.Exists(meta)) File.Delete(meta);
         }
@@ -106,22 +110,12 @@ namespace Nyorowrl.Assetfork.Editor.Tests
             };
         }
 
-        private string ManifestFilePath(string dstAssetRoot)
+        private bool OwnedContains(SyncConfig config, string relPath)
         {
-            using var md5 = MD5.Create();
-            string hash = BitConverter.ToString(md5.ComputeHash(Encoding.UTF8.GetBytes(dstAssetRoot))).Replace("-", "");
-            string dir = Path.Combine(Application.dataPath, "..", "Library", "AssetFork");
-            return Path.Combine(dir, hash + ".json");
+            return config.ownedRelativePaths.Contains(AssetSyncer.NormalizeRelativePath(relPath));
         }
 
-        private bool ManifestContains(string relPath)
-        {
-            string path = ManifestFilePath(_dstAssetPath);
-            if (!File.Exists(path)) return false;
-            return File.ReadAllText(path).Contains("\"" + relPath.Replace('\\', '/') + "\"");
-        }
-
-        // ─── ShouldCopy (#15–18) ──────────────────────────────────────
+        // 笏笏笏 ShouldCopy (#15窶・8) 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
 
         // #15
         [Test]
@@ -189,7 +183,7 @@ namespace Nyorowrl.Assetfork.Editor.Tests
             finally { Directory.Delete(tmp, true); }
         }
 
-        // ─── SyncConfig バリデーション (#19–23) ───────────────────────
+        // 笏笏笏 SyncConfig 繝舌Μ繝・・繧ｷ繝ｧ繝ｳ (#19窶・3) 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
 
         // #19
         [Test]
@@ -385,7 +379,7 @@ namespace Nyorowrl.Assetfork.Editor.Tests
             Assert.AreEqual("v1", File.ReadAllText(nestedDstFile));
         }
 
-        // ─── Phase 1: コピー (#24–32) ─────────────────────────────────
+        // 笏笏笏 Phase 1: 繧ｳ繝斐・ (#24窶・2) 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
 
         // #24
         [Test]
@@ -401,12 +395,13 @@ namespace Nyorowrl.Assetfork.Editor.Tests
         [Test]
         public void Phase1_UpdatedFile_CopiedToDst()
         {
+            var config = MakeConfig();
             WriteSrc("file.txt", "v1");
-            AssetSyncer.SyncConfig(MakeConfig());
+            AssetSyncer.SyncConfig(config);
             Assert.AreEqual("v1", ReadDst("file.txt"));
 
             WriteSrc("file.txt", "v2");
-            AssetSyncer.SyncConfig(MakeConfig());
+            AssetSyncer.SyncConfig(config);
             Assert.AreEqual("v2", ReadDst("file.txt"));
         }
 
@@ -414,16 +409,17 @@ namespace Nyorowrl.Assetfork.Editor.Tests
         [Test]
         public void Phase1_UnchangedFile_NotOverwritten()
         {
+            var config = MakeConfig();
             WriteSrc("file.txt", "same");
-            AssetSyncer.SyncConfig(MakeConfig());
+            AssetSyncer.SyncConfig(config);
 
             DateTime before = DstWriteTime("file.txt");
             System.Threading.Thread.Sleep(50);
 
-            AssetSyncer.SyncConfig(MakeConfig());
+            AssetSyncer.SyncConfig(config);
             DateTime after = DstWriteTime("file.txt");
 
-            Assert.AreEqual(before, after, "Content unchanged → dst must not be overwritten");
+            Assert.AreEqual(before, after, "Content unchanged 竊・dst must not be overwritten");
         }
 
         // #27
@@ -433,7 +429,7 @@ namespace Nyorowrl.Assetfork.Editor.Tests
             WriteSrc("file.txt", "data");
             AssetDatabase.Refresh();
 
-            // Texture2D 型のみ許可 → TextAsset は除外
+            // Texture2D 蝙九・縺ｿ險ｱ蜿ｯ 竊・TextAsset 縺ｯ髯､螟・
             var filter = new FilterCondition { singleTypeName = typeof(Texture2D).AssemblyQualifiedName };
             AssetSyncer.SyncConfig(MakeConfig(new List<FilterCondition> { filter }));
             Assert.IsFalse(DstExists("file.txt"));
@@ -446,7 +442,7 @@ namespace Nyorowrl.Assetfork.Editor.Tests
             WriteSrc("file.txt", "data");
             AssetDatabase.Refresh();
 
-            // TextAsset 型のみ許可 → .txt はコピーされる
+            // TextAsset 蝙九・縺ｿ險ｱ蜿ｯ 竊・.txt 縺ｯ繧ｳ繝斐・縺輔ｌ繧・
             var filter = new FilterCondition { singleTypeName = typeof(TextAsset).AssemblyQualifiedName };
             AssetSyncer.SyncConfig(MakeConfig(new List<FilterCondition> { filter }));
             Assert.IsTrue(DstExists("file.txt"));
@@ -475,15 +471,15 @@ namespace Nyorowrl.Assetfork.Editor.Tests
         }
 
         // #30
-        // meta ファイルがコピーされていないことの確認:
-        // コピーされていれば src と dst の GUID が一致するが、Unity が独立して生成した場合は異なる。
+        // meta 繝輔ぃ繧､繝ｫ縺後さ繝斐・縺輔ｌ縺ｦ縺・↑縺・％縺ｨ縺ｮ遒ｺ隱・
+        // 繧ｳ繝斐・縺輔ｌ縺ｦ縺・ｌ縺ｰ src 縺ｨ dst 縺ｮ GUID 縺御ｸ閾ｴ縺吶ｋ縺後ゞnity 縺檎峡遶九＠縺ｦ逕滓・縺励◆蝣ｴ蜷医・逡ｰ縺ｪ繧九・
         [Test]
         public void Phase1_MetaFile_NotCopied()
         {
             WriteSrc("file.txt", "data");
-            AssetDatabase.Refresh(); // src/.meta が生成される
+            AssetDatabase.Refresh(); // src/.meta 縺檎函謌舌＆繧後ｋ
 
-            AssetSyncer.SyncConfig(MakeConfig()); // 内部で Refresh → dst/.meta が Unity により生成される
+            AssetSyncer.SyncConfig(MakeConfig()); // 蜀・Κ縺ｧ Refresh 竊・dst/.meta 縺・Unity 縺ｫ繧医ｊ逕滓・縺輔ｌ繧・
 
             string srcMeta = Path.Combine(_srcFullPath, "file.txt.meta");
             string dstMeta = Path.Combine(_dstFullPath, "file.txt.meta");
@@ -498,36 +494,38 @@ namespace Nyorowrl.Assetfork.Editor.Tests
 
         // #31
         [Test]
-        public void Phase1_CopiedFile_AddedToManifest()
+        public void Phase1_CopiedFile_AddedToOwned()
         {
             WriteSrc("file.txt");
-            AssetSyncer.SyncConfig(MakeConfig());
-            Assert.IsTrue(ManifestContains("file.txt"));
+            var config = MakeConfig();
+            AssetSyncer.SyncConfig(config);
+            Assert.IsTrue(OwnedContains(config, "file.txt"));
         }
 
         // #32
         [Test]
-        public void Phase1_AlreadySynced_StillInManifest()
+        public void Phase1_AlreadySynced_StillInOwned()
         {
             WriteSrc("file.txt");
-            AssetSyncer.SyncConfig(MakeConfig());
-            // 変更なしで再同期
-            AssetSyncer.SyncConfig(MakeConfig());
-            Assert.IsTrue(ManifestContains("file.txt"));
+            var config = MakeConfig();
+            AssetSyncer.SyncConfig(config);
+            AssetSyncer.SyncConfig(config);
+            Assert.IsTrue(OwnedContains(config, "file.txt"));
         }
 
-        // ─── Phase 2: 削除 (#33–41) ───────────────────────────────────
+        // 笏笏笏 Phase 2: 蜑企勁 (#33窶・1) 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
 
         // #33
         [Test]
         public void Phase2_ManifestFile_SrcDeleted_DeletedFromDst()
         {
+            var config = MakeConfig();
             WriteSrc("file.txt");
-            AssetSyncer.SyncConfig(MakeConfig());
+            AssetSyncer.SyncConfig(config);
             Assert.IsTrue(DstExists("file.txt"));
 
             DeleteSrc("file.txt");
-            AssetSyncer.SyncConfig(MakeConfig());
+            AssetSyncer.SyncConfig(config);
             Assert.IsFalse(DstExists("file.txt"));
         }
 
@@ -535,15 +533,16 @@ namespace Nyorowrl.Assetfork.Editor.Tests
         [Test]
         public void Phase2_ManifestFile_SrcDeleted_MetaAlsoDeleted()
         {
+            var config = MakeConfig();
             WriteSrc("file.txt");
-            AssetSyncer.SyncConfig(MakeConfig());
-            AssetDatabase.Refresh(); // dst/.meta が生成される
+            AssetSyncer.SyncConfig(config);
+            AssetDatabase.Refresh(); // dst/.meta 縺檎函謌舌＆繧後ｋ
 
             string dstMeta = Path.Combine(_dstFullPath, "file.txt.meta");
             Assume.That(File.Exists(dstMeta), "meta must exist after Refresh for this test to be meaningful");
 
             DeleteSrc("file.txt");
-            AssetSyncer.SyncConfig(MakeConfig());
+            AssetSyncer.SyncConfig(config);
             Assert.IsFalse(File.Exists(dstMeta), "meta file must be deleted along with the asset");
         }
 
@@ -551,12 +550,13 @@ namespace Nyorowrl.Assetfork.Editor.Tests
         [Test]
         public void Phase2_ManifestFile_SrcExists_PassesFilter_Kept()
         {
+            var config = MakeConfig();
             WriteSrc("file.txt");
-            AssetSyncer.SyncConfig(MakeConfig());
+            AssetSyncer.SyncConfig(config);
             Assert.IsTrue(DstExists("file.txt"));
 
-            // 再同期しても src が存在してフィルタ通過 → 保持
-            AssetSyncer.SyncConfig(MakeConfig());
+            // 蜀榊酔譛溘＠縺ｦ繧・src 縺悟ｭ伜惠縺励※繝輔ぅ繝ｫ繧ｿ騾夐℃ 竊・菫晄戟
+            AssetSyncer.SyncConfig(config);
             Assert.IsTrue(DstExists("file.txt"));
         }
 
@@ -564,7 +564,7 @@ namespace Nyorowrl.Assetfork.Editor.Tests
         [Test]
         public void Phase2_NonManifestFile_SrcNotExist_Kept()
         {
-            // dst に手動配置（マニフェストなし）
+            // dst 縺ｫ謇句虚驟咲ｽｮ・医・繝九ヵ繧ｧ繧ｹ繝医↑縺暦ｼ・
             WriteDst("manual.txt", "manual");
             AssetSyncer.SyncConfig(MakeConfig());
             Assert.IsTrue(DstExists("manual.txt"), "manually placed file must not be deleted");
@@ -574,11 +574,11 @@ namespace Nyorowrl.Assetfork.Editor.Tests
         [Test]
         public void Phase2_NonManifestFile_SrcExists_Kept()
         {
-            // src と dst に同名ファイルがあっても、dst がマニフェスト外なら触らない
+            // src 縺ｨ dst 縺ｫ蜷悟錐繝輔ぃ繧､繝ｫ縺後≠縺｣縺ｦ繧ゅ‥st 縺後・繝九ヵ繧ｧ繧ｹ繝亥､悶↑繧芽ｧｦ繧峨↑縺・
             WriteSrc("file.txt", "src-content");
             WriteDst("file.txt", "different-manual-content");
 
-            // src のファイルをフィルタで除外して同期（dst の file.txt はマニフェストに入らない）
+            // src 縺ｮ繝輔ぃ繧､繝ｫ繧偵ヵ繧｣繝ｫ繧ｿ縺ｧ髯､螟悶＠縺ｦ蜷梧悄・・st 縺ｮ file.txt 縺ｯ繝槭ル繝輔ぉ繧ｹ繝医↓蜈･繧峨↑縺・ｼ・
             var exclude = new FilterCondition
             {
                 singleTypeName = typeof(TextAsset).AssemblyQualifiedName,
@@ -587,7 +587,7 @@ namespace Nyorowrl.Assetfork.Editor.Tests
             AssetDatabase.Refresh();
             AssetSyncer.SyncConfig(MakeConfig(new List<FilterCondition> { exclude }));
 
-            // マニフェスト外なので内容が違っても保持
+            // 繝槭ル繝輔ぉ繧ｹ繝亥､悶↑縺ｮ縺ｧ蜀・ｮｹ縺碁＆縺｣縺ｦ繧ゆｿ晄戟
             Assert.IsTrue(DstExists("file.txt"));
             Assert.AreEqual("different-manual-content", ReadDst("file.txt"));
         }
@@ -599,20 +599,20 @@ namespace Nyorowrl.Assetfork.Editor.Tests
             WriteSrc("file.txt", "synced");
             AssetDatabase.Refresh();
 
-            // フィルタなしで同期 → マニフェストに登録
-            AssetSyncer.SyncConfig(MakeConfig());
+            var config = MakeConfig();
+            AssetSyncer.SyncConfig(config);
             Assert.IsTrue(DstExists("file.txt"));
-            Assert.IsTrue(ManifestContains("file.txt"));
+            Assert.IsTrue(OwnedContains(config, "file.txt"));
 
-            // TextAsset を除外するフィルタを追加して再同期
-            // dst の内容は src と同一（同期済み） → 削除
             var exclude = new FilterCondition
             {
                 singleTypeName = typeof(TextAsset).AssemblyQualifiedName,
                 invert = true
             };
-            AssetSyncer.SyncConfig(MakeConfig(new List<FilterCondition> { exclude }));
+            config.filters = new List<FilterCondition> { exclude };
+            AssetSyncer.SyncConfig(config);
             Assert.IsFalse(DstExists("file.txt"));
+            Assert.IsFalse(OwnedContains(config, "file.txt"));
         }
 
         // #39
@@ -622,21 +622,23 @@ namespace Nyorowrl.Assetfork.Editor.Tests
             WriteSrc("file.txt", "original");
             AssetDatabase.Refresh();
 
-            // フィルタなしで同期 → マニフェストに登録
-            AssetSyncer.SyncConfig(MakeConfig());
+            // 繝輔ぅ繝ｫ繧ｿ縺ｪ縺励〒蜷梧悄 竊・繝槭ル繝輔ぉ繧ｹ繝医↓逋ｻ骭ｲ
+            var config = MakeConfig();
+            AssetSyncer.SyncConfig(config);
             Assert.IsTrue(DstExists("file.txt"));
 
-            // dst を手動で変更
+            // dst 繧呈焔蜍輔〒螟画峩
             WriteDst("file.txt", "manually-modified");
 
-            // TextAsset を除外するフィルタで再同期
-            // dst 内容が src と異なる → 手動変更と見なし保持
+            // TextAsset 繧帝勁螟悶☆繧九ヵ繧｣繝ｫ繧ｿ縺ｧ蜀榊酔譛・
+            // dst 蜀・ｮｹ縺・src 縺ｨ逡ｰ縺ｪ繧・竊・謇句虚螟画峩縺ｨ隕九↑縺嶺ｿ晄戟
             var exclude = new FilterCondition
             {
                 singleTypeName = typeof(TextAsset).AssemblyQualifiedName,
                 invert = true
             };
-            AssetSyncer.SyncConfig(MakeConfig(new List<FilterCondition> { exclude }));
+            config.filters = new List<FilterCondition> { exclude };
+            AssetSyncer.SyncConfig(config);
             Assert.IsTrue(DstExists("file.txt"), "manually modified file must not be deleted");
         }
 
@@ -644,12 +646,13 @@ namespace Nyorowrl.Assetfork.Editor.Tests
         [Test]
         public void Phase2_EmptySubdirAfterDelete_Remains()
         {
+            var config = MakeConfig();
             WriteSrc("sub/file.txt");
-            AssetSyncer.SyncConfig(MakeConfig());
+            AssetSyncer.SyncConfig(config);
             Assert.IsTrue(DstExists("sub/file.txt"));
 
             DeleteSrc("sub/file.txt");
-            AssetSyncer.SyncConfig(MakeConfig());
+            AssetSyncer.SyncConfig(config);
 
             Assert.IsFalse(DstExists("sub/file.txt"), "file should be deleted");
             string subDir = Path.Combine(_dstFullPath, "sub");
@@ -658,46 +661,41 @@ namespace Nyorowrl.Assetfork.Editor.Tests
 
         // #41
         [Test]
-        public void Phase2_DeletedFile_RemovedFromManifest()
+        public void Phase2_DeletedFile_RemovedFromOwned()
         {
             WriteSrc("file.txt");
-            AssetSyncer.SyncConfig(MakeConfig());
-            Assert.IsTrue(ManifestContains("file.txt"));
+            var config = MakeConfig();
+            AssetSyncer.SyncConfig(config);
+            Assert.IsTrue(OwnedContains(config, "file.txt"));
 
             DeleteSrc("file.txt");
-            AssetSyncer.SyncConfig(MakeConfig());
-            Assert.IsFalse(ManifestContains("file.txt"));
+            AssetSyncer.SyncConfig(config);
+            Assert.IsFalse(OwnedContains(config, "file.txt"));
         }
 
-        // ─── マニフェスト (#42–44) ────────────────────────────────────
+        // 笏笏笏 繝槭ル繝輔ぉ繧ｹ繝・(#42窶・4) 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
 
         // #42
         [Test]
-        public void Manifest_FirstSync_ManifestCreated()
+        public void State_FirstSync_OwnedPathCreated()
         {
             WriteSrc("file.txt");
-            string manifestPath = ManifestFilePath(_dstAssetPath);
-            if (File.Exists(manifestPath)) File.Delete(manifestPath);
+            var config = MakeConfig();
 
-            AssetSyncer.SyncConfig(MakeConfig());
-            Assert.IsTrue(File.Exists(manifestPath));
+            AssetSyncer.SyncConfig(config);
+            Assert.IsTrue(OwnedContains(config, "file.txt"));
         }
 
         // #43
         [Test]
-        public void Manifest_DifferentDstPaths_DifferentFiles()
+        public void State_DifferentConfigs_KeepIndependentOwnedLists()
         {
             string dst2AssetPath = _testRoot + "/Dst2";
-            string dst2FullPath = Path.GetFullPath(
-                Path.Combine(Path.GetDirectoryName(Application.dataPath), dst2AssetPath));
-            Directory.CreateDirectory(dst2FullPath);
-
-            string manifest2 = ManifestFilePath(dst2AssetPath);
-            if (File.Exists(manifest2)) File.Delete(manifest2);
+            Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(Application.dataPath), dst2AssetPath));
 
             WriteSrc("file.txt");
-            AssetSyncer.SyncConfig(MakeConfig());
 
+            var config1 = MakeConfig();
             var config2 = new SyncConfig
             {
                 configName = "TestConfig2",
@@ -706,54 +704,51 @@ namespace Nyorowrl.Assetfork.Editor.Tests
                 destinationPath = dst2AssetPath,
                 filters = new List<FilterCondition>()
             };
+
+            AssetSyncer.SyncConfig(config1);
             AssetSyncer.SyncConfig(config2);
 
-            string manifest1 = ManifestFilePath(_dstAssetPath);
-            Assert.AreNotEqual(manifest1, manifest2, "different dst paths must produce different manifest files");
-            Assert.IsTrue(File.Exists(manifest1));
-            Assert.IsTrue(File.Exists(manifest2));
-
-            // Dst2 は _testRoot 配下のため TearDown で削除される
-            // manifest2 だけ Library に残るので明示的に削除
-            if (File.Exists(manifest2)) File.Delete(manifest2);
+            Assert.IsTrue(OwnedContains(config1, "file.txt"));
+            Assert.IsTrue(OwnedContains(config2, "file.txt"));
         }
 
         // #44
         [Test]
-        public void Manifest_NoChanges_NotUpdated()
+        public void State_Normalize_RemovesDuplicates()
         {
-            WriteSrc("file.txt");
-            AssetSyncer.SyncConfig(MakeConfig()); // 初回同期
+            var config = MakeConfig();
+            config.ownedRelativePaths = new List<string> { "a.txt", "a.txt", "A.txt", "sub\\b.txt" };
+            config.protectedGuids = new List<string> { "", "g1", "g1", "g2" };
 
-            string manifestPath = ManifestFilePath(_dstAssetPath);
-            DateTime before = File.GetLastWriteTimeUtc(manifestPath);
-            System.Threading.Thread.Sleep(50);
+            bool changed = AssetSyncer.NormalizeState(config);
 
-            AssetSyncer.SyncConfig(MakeConfig()); // 変更なし
-            DateTime after = File.GetLastWriteTimeUtc(manifestPath);
-
-            Assert.AreEqual(before, after, "manifest must not be rewritten when nothing changed");
+            Assert.IsTrue(changed);
+            Assert.AreEqual(2, config.ownedRelativePaths.Count);
+            Assert.AreEqual("a.txt", config.ownedRelativePaths[0]);
+            Assert.AreEqual("sub/b.txt", config.ownedRelativePaths[1]);
+            Assert.AreEqual(2, config.protectedGuids.Count);
         }
 
-        // ─── Integration (#45–50) ─────────────────────────────────────
+        // 笏笏笏 Integration (#45窶・0) 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
 
         // #45
         [Test]
         public void Integration_AddUpdateDelete()
         {
+            var config = MakeConfig();
             // Add
             WriteSrc("a.txt", "v1");
-            AssetSyncer.SyncConfig(MakeConfig());
+            AssetSyncer.SyncConfig(config);
             Assert.IsTrue(DstExists("a.txt"));
 
             // Update
             WriteSrc("a.txt", "v2");
-            AssetSyncer.SyncConfig(MakeConfig());
+            AssetSyncer.SyncConfig(config);
             Assert.AreEqual("v2", ReadDst("a.txt"));
 
             // Delete
             DeleteSrc("a.txt");
-            AssetSyncer.SyncConfig(MakeConfig());
+            AssetSyncer.SyncConfig(config);
             Assert.IsFalse(DstExists("a.txt"));
         }
 
@@ -771,7 +766,7 @@ namespace Nyorowrl.Assetfork.Editor.Tests
             Assert.AreEqual("hand-placed", ReadDst("manual.txt"));
         }
 
-        // #47 — 「Preset型を含む」フィルタ + dst に別名Preset → dst の Preset 保持、src の Preset も到着
+        // #47 窶・縲訓reset蝙九ｒ蜷ｫ繧縲阪ヵ繧｣繝ｫ繧ｿ + dst 縺ｫ蛻･蜷恒reset 竊・dst 縺ｮ Preset 菫晄戟縲《rc 縺ｮ Preset 繧ょ芦逹
         [Test]
         public void Integration_FilterIncludesType_OtherDstFileKept()
         {
@@ -779,7 +774,7 @@ namespace Nyorowrl.Assetfork.Editor.Tests
             WriteDst("dst-preset.txt", "manual");
             AssetDatabase.Refresh();
 
-            // TextAsset 型のみ許可
+            // TextAsset 蝙九・縺ｿ險ｱ蜿ｯ
             var include = new FilterCondition { singleTypeName = typeof(TextAsset).AssemblyQualifiedName };
             AssetSyncer.SyncConfig(MakeConfig(new List<FilterCondition> { include }));
 
@@ -787,7 +782,7 @@ namespace Nyorowrl.Assetfork.Editor.Tests
             Assert.IsTrue(DstExists("dst-preset.txt"), "manually placed file must not be touched");
         }
 
-        // #48 — 「Preset型を除外」フィルタ + dst に別名Preset → dst の Preset 保持
+        // #48 窶・縲訓reset蝙九ｒ髯､螟悶阪ヵ繧｣繝ｫ繧ｿ + dst 縺ｫ蛻･蜷恒reset 竊・dst 縺ｮ Preset 菫晄戟
         [Test]
         public void Integration_FilterExcludesType_ManualDstFileKept()
         {
@@ -795,7 +790,7 @@ namespace Nyorowrl.Assetfork.Editor.Tests
             WriteDst("manual.txt", "manual");
             AssetDatabase.Refresh();
 
-            // TextAsset 除外 → src のファイルはコピーされない
+            // TextAsset 髯､螟・竊・src 縺ｮ繝輔ぃ繧､繝ｫ縺ｯ繧ｳ繝斐・縺輔ｌ縺ｪ縺・
             var exclude = new FilterCondition
             {
                 singleTypeName = typeof(TextAsset).AssemblyQualifiedName,
@@ -915,3 +910,4 @@ namespace Nyorowrl.Assetfork.Editor.Tests
 
     }
 }
+

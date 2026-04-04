@@ -250,6 +250,8 @@ namespace Nyorowrl.Assetfork.Editor
 
             EditorGUILayout.Space();
             DrawFilterList(config);
+            EditorGUILayout.Space();
+            DrawProtectedList(config);
             EditorGUILayout.EndScrollView();
             EditorGUILayout.EndVertical();
         }
@@ -345,6 +347,83 @@ namespace Nyorowrl.Assetfork.Editor
                     dropdown.Show(GUILayoutUtility.GetLastRect());
                 }
             }
+
+            EditorGUILayout.EndVertical();
+        }
+
+        private void DrawProtectedList(SyncConfig config)
+        {
+            config.protectedGuids ??= new List<string>();
+
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField("Protected Assets", EditorStyles.boldLabel);
+            GUILayout.FlexibleSpace();
+            var addIcon = EditorGUIUtility.IconContent("d_Toolbar Plus");
+            addIcon.tooltip = "Add Protected Asset";
+            if (GUILayout.Button(addIcon, EditorStyles.iconButton))
+            {
+                Undo.RecordObject(_settings, "Add Protected Asset");
+                config.protectedGuids.Add(string.Empty);
+                ApplyConfigChange(config);
+            }
+            EditorGUILayout.EndHorizontal();
+
+            int deleteIndex = -1;
+            for (int i = 0; i < config.protectedGuids.Count; i++)
+                DrawProtectedEntry(config, i, ref deleteIndex);
+
+            if (deleteIndex >= 0)
+            {
+                Undo.RecordObject(_settings, "Delete Protected Asset");
+                config.protectedGuids.RemoveAt(deleteIndex);
+                ApplyConfigChange(config);
+            }
+        }
+
+        private void DrawProtectedEntry(SyncConfig config, int index, ref int deleteIndex)
+        {
+            string guid = config.protectedGuids[index];
+            string path = AssetDatabase.GUIDToAssetPath(guid);
+            UnityEngine.Object current = string.IsNullOrEmpty(path)
+                ? null
+                : AssetDatabase.LoadMainAssetAtPath(path);
+
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            EditorGUILayout.BeginHorizontal();
+            var next = EditorGUILayout.ObjectField($"Asset {index + 1}", current, typeof(UnityEngine.Object), false);
+            if (next != current)
+            {
+                Undo.RecordObject(_settings, "Change Protected Asset");
+                string nextPath = AssetDatabase.GetAssetPath(next);
+                config.protectedGuids[index] = string.IsNullOrEmpty(nextPath)
+                    ? string.Empty
+                    : AssetDatabase.AssetPathToGUID(nextPath);
+                ApplyConfigChange(config);
+            }
+
+            var deleteIcon = EditorGUIUtility.IconContent("CrossIcon");
+            deleteIcon.tooltip = "Delete";
+            if (GUILayout.Button(deleteIcon, EditorStyles.iconButton))
+                deleteIndex = index;
+            EditorGUILayout.EndHorizontal();
+
+            var state = AssetSyncer.GetProtectedEntryState(config, config.protectedGuids[index], out string resolvedPath, out string relativePath);
+            string statusText;
+            if (state == AssetSyncer.ProtectedEntryState.Source)
+                statusText = $"State: Source ({relativePath})";
+            else if (state == AssetSyncer.ProtectedEntryState.Destination)
+                statusText = $"State: Destination ({relativePath})";
+            else
+                statusText = "State: Invalid (outside Source/Destination or missing asset)";
+
+            var prevColor = GUI.contentColor;
+            if (state == AssetSyncer.ProtectedEntryState.Invalid)
+                GUI.contentColor = Color.yellow;
+            EditorGUILayout.LabelField(statusText, EditorStyles.miniLabel);
+            GUI.contentColor = prevColor;
+
+            if (!string.IsNullOrEmpty(resolvedPath))
+                EditorGUILayout.LabelField($"Path: {resolvedPath}", EditorStyles.miniLabel);
 
             EditorGUILayout.EndVertical();
         }

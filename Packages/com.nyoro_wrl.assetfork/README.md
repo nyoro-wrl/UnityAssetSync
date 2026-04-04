@@ -6,7 +6,8 @@ AssetFork is an editor-only Unity package for synchronizing assets between folde
 
 - Synchronize files from a source folder to a destination folder.
 - Copy only changed files (content hash based).
-- Keep destination changes that were not managed by AssetFork.
+- Keep destination files that are not managed by AssetFork unless explicitly resolved.
+- Protect files manually with a GUID-based `Protected` list.
 - Filter synchronized assets by Unity object type (single or multiple types, include/exclude).
 
 ## Usage

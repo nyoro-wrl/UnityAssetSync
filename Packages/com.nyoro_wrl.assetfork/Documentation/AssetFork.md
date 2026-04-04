@@ -28,9 +28,10 @@ Install this package with the Unity Package Manager.
 
 - Copies only files that are new or content-changed.
 - Never copies `.meta` files from source.
-- Tracks synchronized files in an internal manifest under `Library/AssetFork`.
-- Deletes destination files only when they were previously synchronized by AssetFork and should no longer exist.
-- Keeps manually added destination files that were not synchronized by AssetFork.
+- Tracks synchronized files per config in `SyncConfig.ownedRelativePaths` (saved in settings assets).
+- Supports manual `Protected` entries (GUID-based): destination-protected files are never copied/updated/deleted.
+- Treats source-protected files as sync-excluded (same behavior as filter exclusion).
+- If a destination file already exists and is neither owned nor protected, AssetFork opens a conflict dialog to choose `Owned` or `Protected`.
 - If selected source or destination folders are moved, stored config paths are remapped automatically.
 
 ## Safety rules
@@ -51,6 +52,7 @@ Install this package with the Unity Package Manager.
 |---|---|
 | `Editor/AssetForkWindow.cs` | Main UI for config management. |
 | `Editor/AssetSyncer.cs` | File synchronization and postprocess trigger logic. |
+| `Editor/ConflictResolutionDialog.cs` | Batch conflict resolution dialog (`Owned` / `Protected`). |
 | `Editor/ConfigTreeView.cs` | Config list/tree UI. |
 | `Editor/TypeSelectorDropdown.cs` | Type selection dropdown for filters. |
 | `Runtime/*.cs` | Serializable config models (`AssetForkSettings`, `SyncConfig`, `FilterCondition`) compiled for Editor only. |
