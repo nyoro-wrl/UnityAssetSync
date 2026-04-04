@@ -66,36 +66,42 @@ namespace Nyorowrl.Assetfork.Editor
                 MessageType.Warning);
 
             EditorGUILayout.Space(4f);
-            _scroll = EditorGUILayout.BeginScrollView(_scroll);
-            foreach (var row in _rows)
+            using (var scrollView = new EditorGUILayout.ScrollViewScope(_scroll))
             {
-                EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-                EditorGUILayout.LabelField("Path", row.Conflict.NormalizedRelativePath, EditorStyles.boldLabel);
-                EditorGUILayout.LabelField("Source", row.Conflict.SourceAssetPath);
-                EditorGUILayout.LabelField("Destination", row.Conflict.DestinationAssetPath);
-                row.Resolution = (AssetSyncer.ConflictResolution)EditorGUILayout.EnumPopup("Action", row.Resolution);
-                EditorGUILayout.EndVertical();
+                _scroll = scrollView.scrollPosition;
+                foreach (var row in _rows)
+                {
+                    using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+                    {
+                        EditorGUILayout.LabelField("Path", row.Conflict.NormalizedRelativePath, EditorStyles.boldLabel);
+                        EditorGUILayout.LabelField("Source", row.Conflict.SourceAssetPath);
+                        EditorGUILayout.LabelField("Destination", row.Conflict.DestinationAssetPath);
+                        row.Resolution = (AssetSyncer.ConflictResolution)EditorGUILayout.EnumPopup("Action", row.Resolution);
+                    }
+                }
             }
-            EditorGUILayout.EndScrollView();
 
             GUILayout.FlexibleSpace();
-            EditorGUILayout.BeginHorizontal();
-            if (GUILayout.Button("Cancel"))
+            using (new EditorGUILayout.HorizontalScope())
             {
-                _confirmed = false;
-                Close();
-            }
+                if (GUILayout.Button("Cancel"))
+                {
+                    _confirmed = false;
+                    Close();
+                    GUIUtility.ExitGUI();
+                }
 
-            if (GUILayout.Button("Apply"))
-            {
-                _decisions.Clear();
-                foreach (var row in _rows)
-                    _decisions[row.Conflict.NormalizedRelativePath] = row.Resolution;
+                if (GUILayout.Button("Apply"))
+                {
+                    _decisions.Clear();
+                    foreach (var row in _rows)
+                        _decisions[row.Conflict.NormalizedRelativePath] = row.Resolution;
 
-                _confirmed = true;
-                Close();
+                    _confirmed = true;
+                    Close();
+                    GUIUtility.ExitGUI();
+                }
             }
-            EditorGUILayout.EndHorizontal();
         }
     }
 }
