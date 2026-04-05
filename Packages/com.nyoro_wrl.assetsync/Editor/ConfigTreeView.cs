@@ -48,7 +48,7 @@ namespace Nyorowrl.AssetSync.Editor
                 for (int i = 0; i < Settings.syncConfigs.Count; i++)
                 {
                     string name = Settings.syncConfigs[i].configName;
-                    if (string.IsNullOrEmpty(name)) name = $"Config {i + 1}";
+                    if (string.IsNullOrEmpty(name)) name = $"Sync {i + 1}";
                     items.Add(new TreeViewItem<int>(i, 0, name));
                 }
             }
@@ -68,7 +68,7 @@ namespace Nyorowrl.AssetSync.Editor
 
             var config = Settings.syncConfigs[args.itemID];
             string newName = string.IsNullOrEmpty(args.newName)
-                ? (string.IsNullOrEmpty(config.configName) ? $"Config {args.itemID + 1}" : config.configName)
+                ? (string.IsNullOrEmpty(config.configName) ? $"Sync {args.itemID + 1}" : config.configName)
                 : args.newName;
 
             _onRenamed?.Invoke(config, newName);
