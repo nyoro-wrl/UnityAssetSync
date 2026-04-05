@@ -129,9 +129,9 @@ namespace Nyorowrl.AssetSync.Editor
             string dstRoot = ToFullPath(config.destinationPath);
             Directory.CreateDirectory(dstRoot);
 
-            var protectedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var protectedDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            BuildProtectedPathSets(config, protectedFiles, protectedDirectories);
+            var ignoredFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var ignoredDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            BuildIgnorePathSets(config, ignoredFiles, ignoredDirectories);
 
             int copied = SyncDirectory(
                 config,
@@ -139,8 +139,8 @@ namespace Nyorowrl.AssetSync.Editor
                 dstRoot,
                 config.sourcePath,
                 config.destinationPath,
-                protectedFiles,
-                protectedDirectories,
+                ignoredFiles,
+                ignoredDirectories,
                 out bool syncStateChanged,
                 out bool fileSystemChanged);
 
@@ -170,14 +170,14 @@ namespace Nyorowrl.AssetSync.Editor
             string dstRoot = ToFullPath(config.destinationPath);
             var synced = new HashSet<string>(config.syncRelativePaths ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
             var syncedDirectories = new HashSet<string>(config.syncRelativeDirectoryPaths ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
-            var protectedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var protectedDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            BuildProtectedPathSets(config, protectedFiles, protectedDirectories);
+            var ignoredFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var ignoredDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            BuildIgnorePathSets(config, ignoredFiles, ignoredDirectories);
 
             foreach (string rel in synced.ToList())
             {
-                // Protected destination assets are never deleted by sync operations.
-                if (!IsProtectedRelativePath(rel, protectedFiles, protectedDirectories))
+                // Ignore destination assets are never deleted by sync operations.
+                if (!IsIgnoreRelativePath(rel, ignoredFiles, ignoredDirectories))
                 {
                     string relSystem = NormalizedRelativePathToSystemPath(rel);
                     string dstFile = Path.Combine(dstRoot, relSystem);
@@ -191,7 +191,7 @@ namespace Nyorowrl.AssetSync.Editor
 
             foreach (string rel in syncedDirectories.OrderByDescending(p => p.Length).ToList())
             {
-                if (IsProtectedRelativePath(rel, protectedFiles, protectedDirectories))
+                if (IsIgnoreRelativePath(rel, ignoredFiles, ignoredDirectories))
                     continue;
 
                 string relSystem = NormalizedRelativePathToSystemPath(rel);
@@ -216,14 +216,14 @@ namespace Nyorowrl.AssetSync.Editor
 
             var synced = new HashSet<string>(config.syncRelativePaths ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
             var syncedDirectories = new HashSet<string>(config.syncRelativeDirectoryPaths ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
-            var protectedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var protectedDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            BuildProtectedPathSets(config, protectedFiles, protectedDirectories);
+            var ignoredFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var ignoredDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            BuildIgnorePathSets(config, ignoredFiles, ignoredDirectories);
 
             bool removedAny = false;
             foreach (string rel in synced.ToList())
             {
-                if (IsProtectedRelativePath(rel, protectedFiles, protectedDirectories))
+                if (IsIgnoreRelativePath(rel, ignoredFiles, ignoredDirectories))
                     continue;
 
                 synced.Remove(rel);
@@ -232,7 +232,7 @@ namespace Nyorowrl.AssetSync.Editor
 
             foreach (string rel in syncedDirectories.ToList())
             {
-                if (IsProtectedRelativePath(rel, protectedFiles, protectedDirectories))
+                if (IsIgnoreRelativePath(rel, ignoredFiles, ignoredDirectories))
                     continue;
 
                 syncedDirectories.Remove(rel);
@@ -276,8 +276,8 @@ namespace Nyorowrl.AssetSync.Editor
             string dstRoot,
             string srcAssetRoot,
             string dstAssetRoot,
-            HashSet<string> protectedFiles,
-            HashSet<string> protectedDirectories,
+            HashSet<string> ignoredFiles,
+            HashSet<string> ignoredDirectories,
             out bool stateChanged,
             out bool fileSystemChanged)
         {
@@ -308,7 +308,7 @@ namespace Nyorowrl.AssetSync.Editor
                 {
                     string rel = candidate.NormalizedRelativePath;
 
-                    if (IsProtectedRelativePath(rel, protectedFiles, protectedDirectories))
+                    if (IsIgnoreRelativePath(rel, ignoredFiles, ignoredDirectories))
                     {
                         continue;
                     }
@@ -355,15 +355,15 @@ namespace Nyorowrl.AssetSync.Editor
                         continue;
                     }
 
-                    if (!TryAddDestinationProtectedGuid(config, conflict.DestinationAssetPath, out string protectedGuid))
+                    if (!TryAddDestinationIgnoreGuid(config, conflict.DestinationAssetPath, out string ignoreGuid))
                     {
                         Debug.LogWarning($"[AssetSync] '{config.configName}': Failed to protect '{conflict.DestinationAssetPath}' because GUID could not be resolved.");
                         continue;
                     }
 
-                    if (!config.protectedGuids.Contains(protectedGuid))
+                    if (!config.ignoreGuids.Contains(ignoreGuid))
                     {
-                        config.protectedGuids.Add(protectedGuid);
+                        config.ignoreGuids.Add(ignoreGuid);
                         stateChanged = true;
                     }
 
@@ -381,15 +381,15 @@ namespace Nyorowrl.AssetSync.Editor
                 }
 
                 stateChanged |= NormalizeState(config);
-                protectedFiles.Clear();
-                protectedDirectories.Clear();
-                BuildProtectedPathSets(config, protectedFiles, protectedDirectories);
+                ignoredFiles.Clear();
+                ignoredDirectories.Clear();
+                BuildIgnorePathSets(config, ignoredFiles, ignoredDirectories);
                 candidates = CollectSourceCandidates(config, srcRoot, dstRoot, srcAssetRoot, dstAssetRoot);
             }
 
             foreach (string rel in synced.ToList())
             {
-                if (IsProtectedRelativePath(rel, protectedFiles, protectedDirectories))
+                if (IsIgnoreRelativePath(rel, ignoredFiles, ignoredDirectories))
                 {
                     continue;
                 }
@@ -435,8 +435,8 @@ namespace Nyorowrl.AssetSync.Editor
                 config,
                 srcRoot,
                 dstRoot,
-                protectedFiles,
-                protectedDirectories,
+                ignoredFiles,
+                ignoredDirectories,
                 syncedDirectories,
                 ref stateChanged,
                 ref fileSystemChanged);
@@ -450,8 +450,8 @@ namespace Nyorowrl.AssetSync.Editor
             SyncConfig config,
             string srcRoot,
             string dstRoot,
-            HashSet<string> protectedFiles,
-            HashSet<string> protectedDirectories,
+            HashSet<string> ignoredFiles,
+            HashSet<string> ignoredDirectories,
             HashSet<string> syncedDirectories,
             ref bool stateChanged,
             ref bool fileSystemChanged)
@@ -467,7 +467,7 @@ namespace Nyorowrl.AssetSync.Editor
                         continue;
                     if (!IsWithinSyncScope(normalizedRel, config.includeSubdirectories))
                         continue;
-                    if (IsProtectedRelativePath(normalizedRel, protectedFiles, protectedDirectories))
+                    if (IsIgnoreRelativePath(normalizedRel, ignoredFiles, ignoredDirectories))
                         continue;
 
                     string destinationDirectory = Path.Combine(dstRoot, NormalizedRelativePathToSystemPath(normalizedRel));
@@ -488,7 +488,7 @@ namespace Nyorowrl.AssetSync.Editor
 
             foreach (string rel in syncedDirectories.OrderByDescending(p => p.Length).ToList())
             {
-                if (IsProtectedRelativePath(rel, protectedFiles, protectedDirectories))
+                if (IsIgnoreRelativePath(rel, ignoredFiles, ignoredDirectories))
                     continue;
 
                 bool shouldKeep = config.includeSubdirectories && sourceDirectories.Contains(rel);
@@ -589,7 +589,7 @@ namespace Nyorowrl.AssetSync.Editor
             return ConflictResolutionDialog.ShowDialog(config, conflicts, out decisions);
         }
 
-        private static bool TryAddDestinationProtectedGuid(SyncConfig config, string destinationAssetPath, out string guid)
+        private static bool TryAddDestinationIgnoreGuid(SyncConfig config, string destinationAssetPath, out string guid)
         {
             guid = AssetDatabase.AssetPathToGUID(destinationAssetPath);
             if (!string.IsNullOrEmpty(guid))
@@ -610,18 +610,18 @@ namespace Nyorowrl.AssetSync.Editor
             return normalizedAsset.Substring(normalizedRoot.Length + 1);
         }
 
-        private static void BuildProtectedPathSets(
+        private static void BuildIgnorePathSets(
             SyncConfig config,
-            HashSet<string> protectedFiles,
-            HashSet<string> protectedDirectories)
+            HashSet<string> ignoredFiles,
+            HashSet<string> ignoredDirectories)
         {
-            protectedFiles.Clear();
-            protectedDirectories.Clear();
+            ignoredFiles.Clear();
+            ignoredDirectories.Clear();
 
-            if (config?.protectedGuids == null || string.IsNullOrEmpty(config.destinationPath))
+            if (config?.ignoreGuids == null || string.IsNullOrEmpty(config.destinationPath))
                 return;
 
-            foreach (string guid in config.protectedGuids)
+            foreach (string guid in config.ignoreGuids)
             {
                 if (string.IsNullOrWhiteSpace(guid))
                     continue;
@@ -635,28 +635,28 @@ namespace Nyorowrl.AssetSync.Editor
                 string normalizedRelativePath = NormalizeRelativePath(GetRelativeAssetPath(assetPath, config.destinationPath));
                 bool isFolder = AssetDatabase.IsValidFolder(assetPath);
                 if (isFolder)
-                    protectedDirectories.Add(normalizedRelativePath);
+                    ignoredDirectories.Add(normalizedRelativePath);
                 else
-                    protectedFiles.Add(normalizedRelativePath);
+                    ignoredFiles.Add(normalizedRelativePath);
             }
         }
 
-        private static bool IsProtectedRelativePath(
+        private static bool IsIgnoreRelativePath(
             string normalizedRelativePath,
-            HashSet<string> protectedFiles,
-            HashSet<string> protectedDirectories)
+            HashSet<string> ignoredFiles,
+            HashSet<string> ignoredDirectories)
         {
-            if (protectedFiles.Contains(normalizedRelativePath))
+            if (ignoredFiles.Contains(normalizedRelativePath))
                 return true;
 
-            foreach (string protectedDirectory in protectedDirectories)
+            foreach (string ignoredDirectory in ignoredDirectories)
             {
-                if (string.IsNullOrEmpty(protectedDirectory))
+                if (string.IsNullOrEmpty(ignoredDirectory))
                     return true;
 
-                if (normalizedRelativePath.Equals(protectedDirectory, StringComparison.OrdinalIgnoreCase))
+                if (normalizedRelativePath.Equals(ignoredDirectory, StringComparison.OrdinalIgnoreCase))
                     return true;
-                if (normalizedRelativePath.StartsWith(protectedDirectory + "/", StringComparison.OrdinalIgnoreCase))
+                if (normalizedRelativePath.StartsWith(ignoredDirectory + "/", StringComparison.OrdinalIgnoreCase))
                     return true;
             }
 
@@ -687,9 +687,9 @@ namespace Nyorowrl.AssetSync.Editor
             if (TryGetConfigWarning(warningProbe, out _))
                 return Array.Empty<PreviewCopyEntry>();
 
-            var protectedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var protectedDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            BuildProtectedPathSets(config, protectedFiles, protectedDirectories);
+            var ignoredFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var ignoredDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            BuildIgnorePathSets(config, ignoredFiles, ignoredDirectories);
 
             var synced = new HashSet<string>(
                 (config.syncRelativePaths ?? new List<string>())
@@ -709,7 +709,7 @@ namespace Nyorowrl.AssetSync.Editor
             foreach (var candidate in candidates.OrderBy(c => c.NormalizedRelativePath, StringComparer.OrdinalIgnoreCase))
             {
                 string rel = candidate.NormalizedRelativePath;
-                if (IsProtectedRelativePath(rel, protectedFiles, protectedDirectories))
+                if (IsIgnoreRelativePath(rel, ignoredFiles, ignoredDirectories))
                     continue;
 
                 bool isSynced = synced.Contains(rel);
@@ -740,15 +740,15 @@ namespace Nyorowrl.AssetSync.Editor
             if (config?.syncRelativePaths == null)
                 return result;
 
-            var protectedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var protectedDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            BuildProtectedPathSets(config, protectedFiles, protectedDirectories);
+            var ignoredFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var ignoredDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            BuildIgnorePathSets(config, ignoredFiles, ignoredDirectories);
             foreach (string relativePath in config.syncRelativePaths)
             {
                 string normalizedRelativePath = NormalizeRelativePath(relativePath);
                 if (string.IsNullOrEmpty(normalizedRelativePath))
                     continue;
-                if (IsProtectedRelativePath(normalizedRelativePath, protectedFiles, protectedDirectories))
+                if (IsIgnoreRelativePath(normalizedRelativePath, ignoredFiles, ignoredDirectories))
                     continue;
 
                 result.Add(normalizedRelativePath);
@@ -763,15 +763,15 @@ namespace Nyorowrl.AssetSync.Editor
             if (config?.syncRelativeDirectoryPaths == null)
                 return result;
 
-            var protectedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var protectedDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            BuildProtectedPathSets(config, protectedFiles, protectedDirectories);
+            var ignoredFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var ignoredDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            BuildIgnorePathSets(config, ignoredFiles, ignoredDirectories);
             foreach (string relativePath in config.syncRelativeDirectoryPaths)
             {
                 string normalizedRelativePath = NormalizeRelativePath(relativePath);
                 if (string.IsNullOrEmpty(normalizedRelativePath))
                     continue;
-                if (IsProtectedRelativePath(normalizedRelativePath, protectedFiles, protectedDirectories))
+                if (IsIgnoreRelativePath(normalizedRelativePath, ignoredFiles, ignoredDirectories))
                     continue;
 
                 result.Add(normalizedRelativePath);
@@ -879,11 +879,11 @@ namespace Nyorowrl.AssetSync.Editor
 
             config.syncRelativePaths ??= new List<string>();
             config.syncRelativeDirectoryPaths ??= new List<string>();
-            bool protectedListInitialized = false;
-            if (config.protectedGuids == null)
+            bool ignoreListInitialized = false;
+            if (config.ignoreGuids == null)
             {
-                config.protectedGuids = new List<string>();
-                protectedListInitialized = true;
+                config.ignoreGuids = new List<string>();
+                ignoreListInitialized = true;
             }
 
             var normalizedSync = config.syncRelativePaths
@@ -904,7 +904,7 @@ namespace Nyorowrl.AssetSync.Editor
 
             bool syncChanged = !ListEquals(config.syncRelativePaths, normalizedSync, StringComparer.OrdinalIgnoreCase);
             bool directoryChanged = !ListEquals(config.syncRelativeDirectoryPaths, normalizedSyncDirectories, StringComparer.OrdinalIgnoreCase);
-            bool changed = protectedListInitialized || syncChanged || directoryChanged;
+            bool changed = ignoreListInitialized || syncChanged || directoryChanged;
 
             if (syncChanged)
                 config.syncRelativePaths = normalizedSync;

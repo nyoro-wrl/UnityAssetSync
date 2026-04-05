@@ -998,7 +998,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             var config = MakeConfig();
             config.syncRelativePaths = new List<string> { "a.txt", "a.txt", "A.txt", "sub\\b.txt" };
             config.syncRelativeDirectoryPaths = new List<string> { "sub", "sub/", "SUB", "x\\y" };
-            config.protectedGuids = new List<string> { "", "g1", "g1", "g2" };
+            config.ignoreGuids = new List<string> { "", "g1", "g1", "g2" };
 
             bool changed = AssetSyncer.NormalizeState(config);
 
@@ -1009,11 +1009,11 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             Assert.AreEqual(2, config.syncRelativeDirectoryPaths.Count);
             Assert.AreEqual("sub", config.syncRelativeDirectoryPaths[0]);
             Assert.AreEqual("x/y", config.syncRelativeDirectoryPaths[1]);
-            Assert.AreEqual(4, config.protectedGuids.Count);
-            Assert.AreEqual("", config.protectedGuids[0]);
-            Assert.AreEqual("g1", config.protectedGuids[1]);
-            Assert.AreEqual("g1", config.protectedGuids[2]);
-            Assert.AreEqual("g2", config.protectedGuids[3]);
+            Assert.AreEqual(4, config.ignoreGuids.Count);
+            Assert.AreEqual("", config.ignoreGuids[0]);
+            Assert.AreEqual("g1", config.ignoreGuids[1]);
+            Assert.AreEqual("g1", config.ignoreGuids[2]);
+            Assert.AreEqual("g2", config.ignoreGuids[3]);
         }
 
         // 隨渉隨渉隨渉 Integration (#45遯ｶ繝ｻ0) 隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉
@@ -1158,7 +1158,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
         }
 
         [Test]
-        public void ProtectedDestination_RemoveProtection_ResumesSyncWithoutConflict()
+        public void IgnoreDestination_RemoveProtection_ResumesSyncWithoutConflict()
         {
             var config = MakeConfig();
             WriteSrc("file.txt", "v1");
@@ -1171,19 +1171,19 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             string dstGuid = AssetDatabase.AssetPathToGUID(dstAssetPath);
             Assume.That(!string.IsNullOrEmpty(dstGuid), "destination GUID must be available");
 
-            config.protectedGuids.Add(dstGuid);
+            config.ignoreGuids.Add(dstGuid);
             WriteSrc("file.txt", "v2");
             AssetSyncer.SyncConfig(config);
-            Assert.AreEqual("v1", ReadDst("file.txt"), "protected destination file should not update");
-            Assert.IsTrue(SyncContains(config, "file.txt"), "synced state should be retained while destination is protected");
+            Assert.AreEqual("v1", ReadDst("file.txt"), "ignored destination file should not update");
+            Assert.IsTrue(SyncContains(config, "file.txt"), "synced state should be retained while destination is ignored");
 
-            config.protectedGuids.Remove(dstGuid);
+            config.ignoreGuids.Remove(dstGuid);
             AssetSyncer.SyncConfig(config);
             Assert.AreEqual("v2", ReadDst("file.txt"), "sync should resume after removing destination protection");
         }
 
         [Test]
-        public void ProtectedDestination_RemoveProtection_AfterDisableEnable_ResumesSyncWithoutConflict()
+        public void IgnoreDestination_RemoveProtection_AfterDisableEnable_ResumesSyncWithoutConflict()
         {
             var config = MakeConfig();
             WriteSrc("file.txt", "v1");
@@ -1196,16 +1196,16 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             string dstGuid = AssetDatabase.AssetPathToGUID(dstAssetPath);
             Assume.That(!string.IsNullOrEmpty(dstGuid), "destination GUID must be available");
 
-            config.protectedGuids.Add(dstGuid);
+            config.ignoreGuids.Add(dstGuid);
             WriteSrc("file.txt", "v2");
             AssetSyncer.SyncConfig(config);
-            Assert.AreEqual("v1", ReadDst("file.txt"), "protected destination file should not update");
-            Assert.IsTrue(SyncContains(config, "file.txt"), "synced state should be retained while destination is protected");
+            Assert.AreEqual("v1", ReadDst("file.txt"), "ignored destination file should not update");
+            Assert.IsTrue(SyncContains(config, "file.txt"), "synced state should be retained while destination is ignored");
 
             config.enabled = false;
             AssetSyncer.SyncConfig(config);
-            Assert.IsTrue(DstExists("file.txt"), "protected destination file should remain when sync is disabled");
-            Assert.IsTrue(SyncContains(config, "file.txt"), "synced state should be retained for protected files while disabled");
+            Assert.IsTrue(DstExists("file.txt"), "ignored destination file should remain when sync is disabled");
+            Assert.IsTrue(SyncContains(config, "file.txt"), "synced state should be retained for ignored files while disabled");
 
             config.enabled = true;
             AssetSyncer.SyncConfig(config);
@@ -1220,7 +1220,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
                 return true;
             };
 
-            config.protectedGuids.Remove(dstGuid);
+            config.ignoreGuids.Remove(dstGuid);
             AssetSyncer.SyncConfig(config);
 
             Assert.AreEqual(0, conflictDialogCalls, "removing destination protection should not open conflicts dialog");
@@ -1240,14 +1240,14 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             AssetDatabase.Refresh();
             string dstGuid = AssetDatabase.AssetPathToGUID(_dstAssetPath + "/file.txt");
             Assume.That(!string.IsNullOrEmpty(dstGuid), "destination guid must be available");
-            config.protectedGuids.Add(dstGuid);
+            config.ignoreGuids.Add(dstGuid);
 
             config.enabled = false;
             AssetSyncer.SyncConfig(config);
-            Assert.IsTrue(DstExists("file.txt"), "protected destination file should remain when disabled");
-            Assert.IsTrue(SyncContains(config, "file.txt"), "synced should remain while destination is protected");
+            Assert.IsTrue(DstExists("file.txt"), "ignored destination file should remain when disabled");
+            Assert.IsTrue(SyncContains(config, "file.txt"), "synced should remain while destination is ignored");
 
-            config.protectedGuids.Remove(dstGuid);
+            config.ignoreGuids.Remove(dstGuid);
             bool changed = AssetSyncer.PruneSyncPathsForDisabledConfig(config);
 
             Assert.IsTrue(changed, "removing destination protection while disabled should drop synced state");
@@ -1256,7 +1256,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
         }
 
         [Test]
-        public void CollectSyncedDestinationSyncRelativePaths_ExcludesProtectedDestination()
+        public void CollectSyncedDestinationSyncRelativePaths_ExcludesIgnoreDestination()
         {
             var config = MakeConfig();
             WriteSrc("ignore.txt", "p1");
@@ -1265,8 +1265,8 @@ namespace Nyorowrl.AssetSync.Editor.Tests
 
             AssetDatabase.Refresh();
             string ignoreGuid = AssetDatabase.AssetPathToGUID(_dstAssetPath + "/ignore.txt");
-            Assume.That(!string.IsNullOrEmpty(ignoreGuid), "destination protected asset guid must exist");
-            config.protectedGuids.Add(ignoreGuid);
+            Assume.That(!string.IsNullOrEmpty(ignoreGuid), "destination ignored asset guid must exist");
+            config.ignoreGuids.Add(ignoreGuid);
 
             HashSet<string> syncedSync = AssetSyncer.CollectSyncedDestinationSyncRelativePaths(config);
             Assert.IsFalse(syncedSync.Contains("ignore.txt"));
@@ -1274,26 +1274,26 @@ namespace Nyorowrl.AssetSync.Editor.Tests
         }
 
         [Test]
-        public void ProtectedFolder_DescendantFile_IsNotUpdated()
+        public void IgnoreFolder_DescendantFile_IsNotUpdated()
         {
             var config = MakeConfig();
-            WriteSrc("ProtectedSub/file.txt", "v1");
+            WriteSrc("IgnoreSub/file.txt", "v1");
             AssetSyncer.SyncConfig(config);
-            Assert.AreEqual("v1", ReadDst("ProtectedSub/file.txt"));
+            Assert.AreEqual("v1", ReadDst("IgnoreSub/file.txt"));
 
             AssetDatabase.Refresh();
-            string protectedFolderGuid = AssetDatabase.AssetPathToGUID(_dstAssetPath + "/ProtectedSub");
-            Assume.That(!string.IsNullOrEmpty(protectedFolderGuid), "destination protected folder guid must exist");
-            config.protectedGuids.Add(protectedFolderGuid);
+            string ignoreFolderGuid = AssetDatabase.AssetPathToGUID(_dstAssetPath + "/IgnoreSub");
+            Assume.That(!string.IsNullOrEmpty(ignoreFolderGuid), "destination ignored folder guid must exist");
+            config.ignoreGuids.Add(ignoreFolderGuid);
 
-            WriteSrc("ProtectedSub/file.txt", "v2");
+            WriteSrc("IgnoreSub/file.txt", "v2");
             AssetSyncer.SyncConfig(config);
 
-            Assert.AreEqual("v1", ReadDst("ProtectedSub/file.txt"), "file under protected folder should not be updated");
+            Assert.AreEqual("v1", ReadDst("IgnoreSub/file.txt"), "file under ignored folder should not be updated");
         }
 
         [Test]
-        public void ProtectedEntry_OutsideDestination_IsIgnored()
+        public void IgnoreEntry_OutsideDestination_IsIgnored()
         {
             var config = MakeConfig();
             WriteSrc("file.txt", "v1");
@@ -1303,16 +1303,16 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             AssetDatabase.Refresh();
             string sourceGuid = AssetDatabase.AssetPathToGUID(_srcAssetPath + "/file.txt");
             Assume.That(!string.IsNullOrEmpty(sourceGuid), "source guid must exist");
-            config.protectedGuids.Add(sourceGuid);
+            config.ignoreGuids.Add(sourceGuid);
 
             WriteSrc("file.txt", "v2");
             AssetSyncer.SyncConfig(config);
 
-            Assert.AreEqual("v2", ReadDst("file.txt"), "outside-destination protected entry must be ignored");
+            Assert.AreEqual("v2", ReadDst("file.txt"), "outside-destination ignored entry must be ignored");
         }
 
         [Test]
-        public void ConflictKeep_AddsProtectedGuid()
+        public void ConflictKeep_AddsIgnoreGuid()
         {
             var config = MakeConfig();
             WriteSrc("conflict.txt", "src-v1");
@@ -1325,7 +1325,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             AssetDatabase.Refresh();
             string destinationGuid = AssetDatabase.AssetPathToGUID(_dstAssetPath + "/conflict.txt");
             Assume.That(!string.IsNullOrEmpty(destinationGuid), "destination guid must exist");
-            CollectionAssert.Contains(config.protectedGuids, destinationGuid, "keep decision should register protected destination asset");
+            CollectionAssert.Contains(config.ignoreGuids, destinationGuid, "keep decision should register ignored destination asset");
         }
 
         [Test]
@@ -1436,4 +1436,5 @@ namespace Nyorowrl.AssetSync.Editor.Tests
 
     }
 }
+
 

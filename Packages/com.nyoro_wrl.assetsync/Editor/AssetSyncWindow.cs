@@ -37,7 +37,7 @@ namespace Nyorowrl.AssetSync.Editor
             new Dictionary<FilterCondition, bool>();
         private readonly Dictionary<SyncConfig, ReorderableList> _filterLists =
             new Dictionary<SyncConfig, ReorderableList>();
-        private readonly Dictionary<SyncConfig, ReorderableList> _protectedLists =
+        private readonly Dictionary<SyncConfig, ReorderableList> _ignoreLists =
             new Dictionary<SyncConfig, ReorderableList>();
         private GUIContent _filterValueModeToggleContent;
 
@@ -119,7 +119,7 @@ namespace Nyorowrl.AssetSync.Editor
                 {
                     _filterTypeFoldouts.Clear();
                     _filterLists.Clear();
-                    _protectedLists.Clear();
+                    _ignoreLists.Clear();
                     string path = _settings != null ? AssetDatabase.GetAssetPath(_settings) : "";
                     EditorPrefs.SetString(SettingsPathPrefKey, path);
                     RebuildTreeView();
@@ -142,7 +142,7 @@ namespace Nyorowrl.AssetSync.Editor
                         _settings = newSettings;
                         _filterTypeFoldouts.Clear();
                         _filterLists.Clear();
-                        _protectedLists.Clear();
+                        _ignoreLists.Clear();
                         EditorPrefs.SetString(SettingsPathPrefKey, path);
                         RebuildTreeView();
                         RestoreOrInitializeConfigSelection();
@@ -321,7 +321,7 @@ namespace Nyorowrl.AssetSync.Editor
                     EditorGUILayout.Space();
                     DrawListSectionWithHorizontalMargin(() => DrawFilterList(config));
                     EditorGUILayout.Space();
-                    DrawListSectionWithHorizontalMargin(() => DrawProtectedList(config));
+                    DrawListSectionWithHorizontalMargin(() => DrawIgnoreList(config));
                     EditorGUILayout.Space();
                     DrawListSectionWithHorizontalMargin(() => DrawCopyPreview(config));
                 }
@@ -755,7 +755,7 @@ namespace Nyorowrl.AssetSync.Editor
                 : AssetDatabase.LoadMainAssetAtPath(assetPath);
             bool isValid = isFilterAsset
                 ? IsFilterAssetGuidValid(config, guid)
-                : IsProtectedGuidValid(config, guid);
+                : IsIgnoreGuidValid(config, guid);
 
             Color previousBackgroundColor = GUI.backgroundColor;
             if (!isValid)
@@ -887,59 +887,59 @@ namespace Nyorowrl.AssetSync.Editor
             filter.multipleAssetGuids ??= new List<string>();
         }
 
-        private void DrawProtectedList(SyncConfig config)
+        private void DrawIgnoreList(SyncConfig config)
         {
-            config.protectedGuids ??= new List<string>();
-            GetOrCreateProtectedList(config).DoLayoutList();
+            config.ignoreGuids ??= new List<string>();
+            GetOrCreateIgnoreList(config).DoLayoutList();
         }
 
-        private ReorderableList GetOrCreateProtectedList(SyncConfig config)
+        private ReorderableList GetOrCreateIgnoreList(SyncConfig config)
         {
-            if (_protectedLists.TryGetValue(config, out var existing))
+            if (_ignoreLists.TryGetValue(config, out var existing))
             {
-                existing.list = config.protectedGuids;
+                existing.list = config.ignoreGuids;
                 return existing;
             }
 
-            config.protectedGuids ??= new List<string>();
+            config.ignoreGuids ??= new List<string>();
 
-            var list = new ReorderableList(config.protectedGuids, typeof(string),
+            var list = new ReorderableList(config.ignoreGuids, typeof(string),
                 draggable: true, displayHeader: true, displayAddButton: true, displayRemoveButton: true);
 
-            list.drawHeaderCallback = rect => EditorGUI.LabelField(rect, "Destination Ignore Assets");
+            list.drawHeaderCallback = rect => EditorGUI.LabelField(rect, "Ignore Destination Assets");
             list.elementHeight = EditorGUIUtility.singleLineHeight + 2;
 
             list.drawElementCallback = (rect, index, isActive, isFocused) =>
             {
-                if (index < 0 || index >= config.protectedGuids.Count)
+                if (index < 0 || index >= config.ignoreGuids.Count)
                     return;
 
                 var fieldRect = new Rect(rect.x, rect.y + 1, rect.width, EditorGUIUtility.singleLineHeight);
-                DrawAssetFieldControl(fieldRect, config.protectedGuids[index], config, isFilterAsset: false, "Change Protected Asset", guid =>
+                DrawAssetFieldControl(fieldRect, config.ignoreGuids[index], config, isFilterAsset: false, "Change Ignore Asset", guid =>
                 {
-                    config.protectedGuids[index] = guid;
+                    config.ignoreGuids[index] = guid;
                     ApplyConfigChange(config);
                 });
             };
 
             list.onAddCallback = _ =>
             {
-                Undo.RecordObject(_settings, "Add Protected Asset");
-                config.protectedGuids.Add(string.Empty);
+                Undo.RecordObject(_settings, "Add Ignore Asset");
+                config.ignoreGuids.Add(string.Empty);
                 ApplyConfigChange(config);
             };
 
             list.onRemoveCallback = _ =>
             {
-                if (list.index < 0 || list.index >= config.protectedGuids.Count)
+                if (list.index < 0 || list.index >= config.ignoreGuids.Count)
                     return;
 
-                Undo.RecordObject(_settings, "Delete Protected Asset");
-                config.protectedGuids.RemoveAt(list.index);
+                Undo.RecordObject(_settings, "Delete Ignore Asset");
+                config.ignoreGuids.RemoveAt(list.index);
                 ApplyConfigChange(config);
             };
 
-            _protectedLists[config] = list;
+            _ignoreLists[config] = list;
             return list;
         }
 
@@ -948,7 +948,7 @@ namespace Nyorowrl.AssetSync.Editor
             return IsGuidWithinRoot(guid, config?.sourcePath);
         }
 
-        private static bool IsProtectedGuidValid(SyncConfig config, string guid)
+        private static bool IsIgnoreGuidValid(SyncConfig config, string guid)
         {
             return IsGuidWithinRoot(guid, config?.destinationPath);
         }
@@ -1159,7 +1159,7 @@ namespace Nyorowrl.AssetSync.Editor
             EditorUtility.SetDirty(_settings);
             _filterTypeFoldouts.Clear();
             _filterLists.Clear();
-            _protectedLists.Clear();
+            _ignoreLists.Clear();
 
             _configTreeView.Reload();
             int next = Mathf.Clamp(idx - 1, 0, _settings.syncConfigs.Count - 1);
@@ -1385,7 +1385,7 @@ namespace Nyorowrl.AssetSync.Editor
         private static void EnsureConfigCollections(SyncConfig config)
         {
             config.filters ??= new List<FilterCondition>();
-            config.protectedGuids ??= new List<string>();
+            config.ignoreGuids ??= new List<string>();
             config.syncRelativePaths ??= new List<string>();
             config.syncRelativeDirectoryPaths ??= new List<string>();
         }
@@ -1422,3 +1422,4 @@ namespace Nyorowrl.AssetSync.Editor
         }
     }
 }
+

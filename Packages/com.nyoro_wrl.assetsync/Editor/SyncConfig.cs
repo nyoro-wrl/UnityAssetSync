@@ -14,6 +14,6 @@ namespace Nyorowrl.AssetSync
         public List<FilterCondition> filters = new List<FilterCondition>();
         public List<string> syncRelativePaths = new List<string>();
         public List<string> syncRelativeDirectoryPaths = new List<string>();
-        public List<string> protectedGuids = new List<string>();
+        public List<string> ignoreGuids = new List<string>();
     }
 }
