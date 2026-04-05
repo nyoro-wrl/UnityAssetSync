@@ -989,7 +989,7 @@ namespace Nyorowrl.AssetSync.Editor
 
             if (previewEntries.Count == 0)
             {
-                EditorGUILayout.HelpBox("No files will be copied.", MessageType.None);
+                EditorGUILayout.HelpBox("No assets will be synchronized.", MessageType.None);
                 return;
             }
 

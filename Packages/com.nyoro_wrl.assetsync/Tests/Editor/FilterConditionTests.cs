@@ -73,6 +73,48 @@ namespace Nyorowrl.AssetSync.Editor.Tests
         }
 
         [Test]
+        public void PassesFilters_AssetIncludes_AreEvaluatedAsOr()
+        {
+            var filters = new List<FilterCondition>
+            {
+                new FilterCondition
+                {
+                    targetKind = FilterConditionTargetKind.Asset,
+                    singleAssetGuid = AssetDatabase.AssetPathToGUID(_txtAssetPath)
+                },
+                new FilterCondition
+                {
+                    targetKind = FilterConditionTargetKind.Asset,
+                    singleAssetGuid = AssetDatabase.AssetPathToGUID(_nestedAssetPath)
+                }
+            };
+
+            Assert.IsTrue(AssetSyncer.PassesFilters(_txtAssetPath, filters, TestDir));
+            Assert.IsTrue(AssetSyncer.PassesFilters(_nestedAssetPath, filters, TestDir));
+        }
+
+        [Test]
+        public void PassesFilters_AssetIncludeOutsideSource_DoesNotSatisfyOr()
+        {
+            var filters = new List<FilterCondition>
+            {
+                new FilterCondition
+                {
+                    targetKind = FilterConditionTargetKind.Asset,
+                    singleAssetGuid = AssetDatabase.AssetPathToGUID(_outsideAssetPath)
+                },
+                new FilterCondition
+                {
+                    targetKind = FilterConditionTargetKind.Asset,
+                    singleAssetGuid = AssetDatabase.AssetPathToGUID(_txtAssetPath)
+                }
+            };
+
+            Assert.IsTrue(AssetSyncer.PassesFilters(_txtAssetPath, filters, TestDir));
+            Assert.IsFalse(AssetSyncer.PassesFilters(_nestedAssetPath, filters, TestDir));
+        }
+
+        [Test]
         public void SingleType_Matching_ReturnsTrue()
         {
             var f = new FilterCondition { singleTypeName = typeof(TextAsset).AssemblyQualifiedName };

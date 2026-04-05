@@ -74,6 +74,26 @@ namespace Nyorowrl.AssetSync.Editor
             }
         }
 
+        private readonly struct EmptyDirectoryCandidate
+        {
+            public readonly string NormalizedRelativePath;
+            public readonly string DestinationDirectoryPath;
+            public readonly string SourceAssetPath;
+            public readonly string DestinationAssetPath;
+
+            public EmptyDirectoryCandidate(
+                string normalizedRelativePath,
+                string destinationDirectoryPath,
+                string sourceAssetPath,
+                string destinationAssetPath)
+            {
+                NormalizedRelativePath = normalizedRelativePath;
+                DestinationDirectoryPath = destinationDirectoryPath;
+                SourceAssetPath = sourceAssetPath;
+                DestinationAssetPath = destinationAssetPath;
+            }
+        }
+
         internal static ConflictResolverDelegate ConflictResolverOverride;
 
         internal static void ResumeSyncAfterConflictDialog(SyncConfig config)
@@ -724,7 +744,25 @@ namespace Nyorowrl.AssetSync.Editor
                 result.Add(new PreviewCopyEntry(candidate.SourceAssetPath, candidate.DestinationAssetPath));
             }
 
-            return result;
+            foreach (var emptyDirectory in CollectEmptyDirectoryCandidates(config, srcRoot, dstRoot, config.sourcePath, config.destinationPath)
+                .OrderBy(c => c.NormalizedRelativePath, StringComparer.OrdinalIgnoreCase))
+            {
+                string rel = emptyDirectory.NormalizedRelativePath;
+                if (IsIgnoreRelativePath(rel, ignoredFiles, ignoredDirectories))
+                    continue;
+                if (File.Exists(emptyDirectory.DestinationDirectoryPath))
+                    continue;
+
+                bool destinationDirectoryExists = Directory.Exists(emptyDirectory.DestinationDirectoryPath);
+                if (!includeUnchanged && destinationDirectoryExists)
+                    continue;
+
+                result.Add(new PreviewCopyEntry(emptyDirectory.SourceAssetPath, emptyDirectory.DestinationAssetPath));
+            }
+
+            return result
+                .OrderBy(e => e.DestinationAssetPath, StringComparer.OrdinalIgnoreCase)
+                .ToList();
         }
 
         internal static IReadOnlyList<string> CollectCopyPreviewDestinationAssetPaths(SyncConfig config)
@@ -775,6 +813,40 @@ namespace Nyorowrl.AssetSync.Editor
                     continue;
 
                 result.Add(normalizedRelativePath);
+            }
+
+            return result;
+        }
+
+        private static List<EmptyDirectoryCandidate> CollectEmptyDirectoryCandidates(
+            SyncConfig config,
+            string srcRoot,
+            string dstRoot,
+            string srcAssetRoot,
+            string dstAssetRoot)
+        {
+            var result = new List<EmptyDirectoryCandidate>();
+            if (config == null || !config.includeSubdirectories)
+                return result;
+
+            foreach (string sourceDirectory in Directory.GetDirectories(srcRoot, "*", SearchOption.AllDirectories))
+            {
+                if (!IsDirectoryEmpty(sourceDirectory))
+                    continue;
+
+                string relPath = sourceDirectory.Substring(srcRoot.Length).TrimStart(Path.DirectorySeparatorChar, '/');
+                string normalizedRel = NormalizeRelativePath(relPath);
+                if (string.IsNullOrEmpty(normalizedRel))
+                    continue;
+                if (!IsWithinSyncScope(normalizedRel, config.includeSubdirectories))
+                    continue;
+
+                string destinationDirectoryPath = Path.Combine(dstRoot, NormalizedRelativePathToSystemPath(normalizedRel));
+                result.Add(new EmptyDirectoryCandidate(
+                    normalizedRel,
+                    destinationDirectoryPath,
+                    srcAssetRoot + "/" + normalizedRel,
+                    dstAssetRoot + "/" + normalizedRel));
             }
 
             return result;
@@ -1141,7 +1213,42 @@ namespace Nyorowrl.AssetSync.Editor
             if (filters == null || filters.Count == 0)
                 return true;
 
-            return filters.All(f => EvaluateCondition(f, assetPath, sourceAssetRoot));
+            if (!PassesAssetIncludeFilters(assetPath, filters, sourceAssetRoot))
+                return false;
+
+            return filters
+                .Where(f => !IsAssetIncludeFilter(f))
+                .All(f => EvaluateCondition(f, assetPath, sourceAssetRoot));
+        }
+
+        private static bool PassesAssetIncludeFilters(
+            string assetPath,
+            IEnumerable<FilterCondition> filters,
+            string sourceAssetRoot)
+        {
+            bool hasApplicableIncludeFilter = false;
+            foreach (FilterCondition filter in filters)
+            {
+                if (!IsAssetIncludeFilter(filter))
+                    continue;
+
+                bool matched = EvaluateAssetCondition(filter, assetPath, sourceAssetRoot, out bool noOp);
+                if (noOp)
+                    continue;
+
+                hasApplicableIncludeFilter = true;
+                if (matched)
+                    return true;
+            }
+
+            return !hasApplicableIncludeFilter;
+        }
+
+        private static bool IsAssetIncludeFilter(FilterCondition condition)
+        {
+            return condition != null
+                && condition.targetKind == FilterConditionTargetKind.Asset
+                && !condition.invert;
         }
 
         internal static bool EvaluateCondition(FilterCondition condition, string assetPath, string sourceAssetRoot = null)
@@ -1259,6 +1366,19 @@ namespace Nyorowrl.AssetSync.Editor
 
             UnityEngine.Object asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(assetPath);
             return asset != null && type.IsAssignableFrom(asset.GetType());
+        }
+
+        private static bool IsDirectoryEmpty(string directoryPath)
+        {
+            foreach (string entry in Directory.EnumerateFileSystemEntries(directoryPath))
+            {
+                if (entry.EndsWith(".meta", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                return false;
+            }
+
+            return true;
         }
 
         private static string ComputeMD5(string filePath)

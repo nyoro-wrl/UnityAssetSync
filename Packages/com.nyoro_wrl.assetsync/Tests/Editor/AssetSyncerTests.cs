@@ -231,6 +231,29 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             CollectionAssert.DoesNotContain(preview, _dstAssetPath + "/same.txt");
             CollectionAssert.DoesNotContain(preview, _dstAssetPath + "/conflict.txt");
         }
+
+        [Test]
+        public void CollectCopyPreviewDestinationAssetPaths_EmptySubdirectory_IncludesDirectoryPath()
+        {
+            Directory.CreateDirectory(Path.Combine(_srcFullPath, "preview", "empty"));
+            var config = MakeConfig();
+
+            IReadOnlyList<string> preview = AssetSyncer.CollectCopyPreviewDestinationAssetPaths(config);
+
+            CollectionAssert.Contains(preview, _dstAssetPath + "/preview/empty");
+        }
+
+        [Test]
+        public void CollectCopyPreviewDestinationAssetPaths_NonEmptySubdirectory_DoesNotIncludeDirectoryPath()
+        {
+            WriteSrc("preview/non-empty/file.txt", "v1");
+            var config = MakeConfig();
+
+            IReadOnlyList<string> preview = AssetSyncer.CollectCopyPreviewDestinationAssetPaths(config);
+
+            CollectionAssert.Contains(preview, _dstAssetPath + "/preview/non-empty/file.txt");
+            CollectionAssert.DoesNotContain(preview, _dstAssetPath + "/preview/non-empty");
+        }
         // #19
         [Test]
         public void SyncConfig_Disabled_DoesNotSync()
