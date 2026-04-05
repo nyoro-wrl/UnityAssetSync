@@ -906,7 +906,7 @@ namespace Nyorowrl.AssetSync.Editor
             var list = new ReorderableList(config.protectedGuids, typeof(string),
                 draggable: true, displayHeader: true, displayAddButton: true, displayRemoveButton: true);
 
-            list.drawHeaderCallback = rect => EditorGUI.LabelField(rect, "Destination Protected Assets");
+            list.drawHeaderCallback = rect => EditorGUI.LabelField(rect, "Destination Ignore Assets");
             list.elementHeight = EditorGUIUtility.singleLineHeight + 2;
 
             list.drawElementCallback = (rect, index, isActive, isFocused) =>
