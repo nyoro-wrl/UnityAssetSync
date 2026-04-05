@@ -11,6 +11,8 @@ namespace Nyorowrl.AssetSync.Editor
     {
         private const double AutoRefreshIntervalSeconds = 2.0d;
         private const string CustomBadgeIconPath = "Packages/com.nyoro_wrl.assetsync/Editor/Icons/icon.png";
+        private const float SmallRowBadgeSize = 10f;
+        private const float LargeItemBadgeSize = 24f;
 
         private static readonly HashSet<string> SyncedAssetPaths = new HashSet<string>(StringComparer.Ordinal);
 
@@ -79,7 +81,13 @@ namespace Nyorowrl.AssetSync.Editor
                     HashSet<string> syncedSyncRelativePaths = AssetSyncer.CollectSyncedDestinationSyncRelativePaths(config);
                     foreach (string normalizedRelativePath in syncedSyncRelativePaths)
                     {
-                        SyncedAssetPaths.Add(destinationRoot + "/" + normalizedRelativePath);
+                        AddManagedDestinationPathWithParentFolders(destinationRoot, normalizedRelativePath);
+                    }
+
+                    HashSet<string> syncedSyncRelativeDirectories = AssetSyncer.CollectSyncedDestinationSyncRelativeDirectoryPaths(config);
+                    foreach (string normalizedRelativePath in syncedSyncRelativeDirectories)
+                    {
+                        AddManagedDestinationPathWithParentFolders(destinationRoot, normalizedRelativePath);
                     }
                 }
             }
@@ -89,7 +97,7 @@ namespace Nyorowrl.AssetSync.Editor
 
         private static void DrawBadge(Rect itemRect)
         {
-            float size = itemRect.height <= 20f ? 18f : 24f;
+            float size = itemRect.height <= 20f ? SmallRowBadgeSize : LargeItemBadgeSize;
             Rect badgeRect = GetBadgeRect(itemRect, size);
 
             if (_customBadgeIcon == null)
@@ -101,13 +109,32 @@ namespace Nyorowrl.AssetSync.Editor
             GUI.DrawTexture(badgeRect, _customBadgeIcon, ScaleMode.ScaleToFit, true);
         }
 
+        private static void AddManagedDestinationPathWithParentFolders(string destinationRoot, string normalizedRelativePath)
+        {
+            if (string.IsNullOrEmpty(destinationRoot) || string.IsNullOrEmpty(normalizedRelativePath))
+                return;
+
+            SyncedAssetPaths.Add(NormalizeAssetPath(destinationRoot + "/" + normalizedRelativePath));
+
+            int separatorIndex = normalizedRelativePath.LastIndexOf('/');
+            while (separatorIndex >= 0)
+            {
+                string folderRelativePath = normalizedRelativePath.Substring(0, separatorIndex);
+                if (string.IsNullOrEmpty(folderRelativePath))
+                    break;
+
+                SyncedAssetPaths.Add(NormalizeAssetPath(destinationRoot + "/" + folderRelativePath));
+                separatorIndex = folderRelativePath.LastIndexOf('/');
+            }
+        }
+
         private static Rect GetBadgeRect(Rect itemRect, float size)
         {
             if (itemRect.height <= 20f)
             {
                 float iconX = itemRect.x + 1f;
                 float iconY = itemRect.y + Mathf.Max(0f, (itemRect.height - 16f) * 0.5f);
-                return new Rect(iconX + 16f - (size * 0.85f), iconY + 16f - (size * 0.85f), size, size);
+                return new Rect(iconX + 16f - size, iconY + 16f - size, size, size);
             }
 
             float iconAreaSize = Mathf.Min(itemRect.width, itemRect.height);
