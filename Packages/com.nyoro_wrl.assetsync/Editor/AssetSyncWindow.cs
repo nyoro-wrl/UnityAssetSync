@@ -15,10 +15,16 @@ namespace Nyorowrl.AssetSync.Editor
         private static readonly string[] FilterActionLabels = { "Include", "Exclude" };
         private const float FilterTypeModeToggleWidth = 30f;
         private const float ListSectionHorizontalMargin = 6f;
+        private const float PreviewListMaxHeight = 180f;
+        private const float PreviewListMinHeight = 64f;
+        private const float PreviewIconSize = 16f;
         internal static Func<string, string, string, string, bool> DisplayDialogOverride;
 
         private AssetSyncSettings _settings;
         private Vector2 _detailScrollPosition;
+        private Vector2 _previewScrollPosition;
+        [SerializeField] private bool _isPreviewExpanded = true;
+        [SerializeField] private string _selectedPreviewEntryKey;
         private float _listPanelWidth = 150f;
         private bool _isResizing;
         private readonly Queue<Action> _deferredSyncActions = new Queue<Action>();
@@ -316,6 +322,8 @@ namespace Nyorowrl.AssetSync.Editor
                     DrawListSectionWithHorizontalMargin(() => DrawFilterList(config));
                     EditorGUILayout.Space();
                     DrawListSectionWithHorizontalMargin(() => DrawIgnoreList(config));
+                    EditorGUILayout.Space();
+                    DrawListSectionWithHorizontalMargin(() => DrawCopyPreview(config));
                 }
 
                 if (!config.isSyncActivated)
@@ -755,6 +763,175 @@ namespace Nyorowrl.AssetSync.Editor
 
             _ignoreLists[config] = list;
             return list;
+        }
+
+        private void DrawCopyPreview(SyncConfig config)
+        {
+            bool canPreview = CanPreviewCopyTargets(config, out string blockedReason);
+            bool includeUnchangedForPreview = (config != null && config.enabled)
+                || _deferredSyncScheduled
+                || _deferredSyncActions.Count > 0;
+            IReadOnlyList<AssetSyncer.PreviewCopyEntry> previewEntries = canPreview
+                ? AssetSyncer.CollectCopyPreviewEntries(config, includeUnchanged: includeUnchangedForPreview)
+                : Array.Empty<AssetSyncer.PreviewCopyEntry>();
+
+            _isPreviewExpanded = EditorGUILayout.Foldout(_isPreviewExpanded, $"Preview ({previewEntries.Count})", true);
+            if (!_isPreviewExpanded)
+                return;
+
+            if (!canPreview)
+            {
+                EditorGUILayout.HelpBox(blockedReason, MessageType.Info);
+                return;
+            }
+
+            if (previewEntries.Count == 0)
+            {
+                EditorGUILayout.HelpBox("No files will be copied.", MessageType.None);
+                return;
+            }
+
+            bool selectedEntryExists = false;
+            foreach (var previewEntry in previewEntries)
+            {
+                if (GetPreviewEntryKey(previewEntry) == _selectedPreviewEntryKey)
+                {
+                    selectedEntryExists = true;
+                    break;
+                }
+            }
+            if (!selectedEntryExists)
+                _selectedPreviewEntryKey = null;
+
+            float rowHeight = EditorGUIUtility.singleLineHeight + EditorGUIUtility.standardVerticalSpacing;
+            float desiredHeight = (previewEntries.Count * rowHeight) + 8f;
+            float listHeight = Mathf.Clamp(desiredHeight, PreviewListMinHeight, PreviewListMaxHeight);
+
+            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+            {
+                using (var scroll = new EditorGUILayout.ScrollViewScope(_previewScrollPosition, GUILayout.Height(listHeight)))
+                {
+                    _previewScrollPosition = scroll.scrollPosition;
+                    foreach (var previewEntry in previewEntries)
+                    {
+                        float entryHeight = Mathf.Max(PreviewIconSize, EditorGUIUtility.singleLineHeight);
+                        Rect rowRect = EditorGUILayout.GetControlRect(false, entryHeight);
+                        string entryKey = GetPreviewEntryKey(previewEntry);
+                        bool isSelected = entryKey == _selectedPreviewEntryKey;
+                        if (isSelected)
+                            EditorGUI.DrawRect(rowRect, GetPreviewSelectedRowColor());
+
+                        if (GUI.Button(rowRect, GUIContent.none, GUIStyle.none))
+                        {
+                            _selectedPreviewEntryKey = entryKey;
+                            SelectPreviewEntryInProjectWindow(previewEntry, preferDestination: config.enabled);
+                        }
+                        EditorGUIUtility.AddCursorRect(rowRect, MouseCursor.Link);
+
+                        Texture icon = GetPreviewIcon(previewEntry.SourceAssetPath, previewEntry.DestinationAssetPath);
+
+                        float iconY = rowRect.y + ((rowRect.height - PreviewIconSize) * 0.5f);
+                        var iconRect = new Rect(rowRect.x, iconY, PreviewIconSize, PreviewIconSize);
+                        GUI.Label(iconRect, icon != null ? new GUIContent(icon) : GUIContent.none);
+
+                        const float iconTextSpacing = 4f;
+                        float textX = iconRect.xMax + iconTextSpacing;
+                        float textHeight = EditorGUIUtility.singleLineHeight;
+                        float textY = rowRect.y + ((rowRect.height - textHeight) * 0.5f);
+                        var textRect = new Rect(textX, textY, Mathf.Max(0f, rowRect.xMax - textX), textHeight);
+                        EditorGUI.LabelField(textRect, previewEntry.DestinationAssetPath, EditorStyles.miniLabel);
+                    }
+                }
+            }
+        }
+
+        private static Texture GetPreviewIcon(string sourceAssetPath, string destinationAssetPath)
+        {
+            Texture icon = GetAssetIcon(sourceAssetPath);
+            if (icon != null)
+                return icon;
+
+            icon = GetAssetIcon(destinationAssetPath);
+            if (icon != null)
+                return icon;
+
+            return EditorGUIUtility.IconContent("DefaultAsset Icon")?.image;
+        }
+
+        private static Texture GetAssetIcon(string assetPath)
+        {
+            if (string.IsNullOrEmpty(assetPath))
+                return EditorGUIUtility.IconContent("DefaultAsset Icon")?.image;
+
+            var asset = AssetDatabase.LoadMainAssetAtPath(assetPath);
+            Texture icon = null;
+            if (asset != null)
+            {
+                icon = AssetPreview.GetMiniThumbnail(asset);
+                if (icon == null)
+                    icon = EditorGUIUtility.ObjectContent(asset, asset.GetType()).image;
+            }
+
+            icon ??= AssetDatabase.GetCachedIcon(assetPath);
+            return icon;
+        }
+
+        private static string GetPreviewEntryKey(AssetSyncer.PreviewCopyEntry entry)
+        {
+            return $"{entry.SourceAssetPath}|{entry.DestinationAssetPath}";
+        }
+
+        private static Color GetPreviewSelectedRowColor()
+        {
+            return EditorGUIUtility.isProSkin
+                ? new Color(0.24f, 0.49f, 0.90f, 0.35f)
+                : new Color(0.24f, 0.49f, 0.90f, 0.22f);
+        }
+
+        private static void SelectPreviewEntryInProjectWindow(
+            AssetSyncer.PreviewCopyEntry previewEntry,
+            bool preferDestination)
+        {
+            string primaryPath = preferDestination
+                ? previewEntry.DestinationAssetPath
+                : previewEntry.SourceAssetPath;
+            string secondaryPath = preferDestination
+                ? previewEntry.SourceAssetPath
+                : previewEntry.DestinationAssetPath;
+
+            var asset = AssetDatabase.LoadMainAssetAtPath(primaryPath);
+            if (asset == null)
+                asset = AssetDatabase.LoadMainAssetAtPath(secondaryPath);
+            if (asset == null)
+                return;
+
+            Selection.activeObject = asset;
+            EditorGUIUtility.PingObject(asset);
+            EditorUtility.FocusProjectWindow();
+        }
+
+        private static bool CanPreviewCopyTargets(SyncConfig config, out string reason)
+        {
+            reason = null;
+            if (config == null)
+            {
+                reason = "Config is not selected.";
+                return false;
+            }
+
+            if (!IsFolderSelectionValid(config.sourcePath) || !IsFolderSelectionValid(config.destinationPath))
+            {
+                reason = "Set valid Source and Destination folders to show preview.";
+                return false;
+            }
+
+            if (TryGetConfigWarningForActivation(config, out string warning))
+            {
+                reason = warning;
+                return false;
+            }
+
+            return true;
         }
 
         private void DeleteConfig(int idx)

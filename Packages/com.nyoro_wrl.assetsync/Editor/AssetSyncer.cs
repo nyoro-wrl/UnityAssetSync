@@ -41,6 +41,18 @@ namespace Nyorowrl.AssetSync.Editor
             }
         }
 
+        internal readonly struct PreviewCopyEntry
+        {
+            public readonly string SourceAssetPath;
+            public readonly string DestinationAssetPath;
+
+            public PreviewCopyEntry(string sourceAssetPath, string destinationAssetPath)
+            {
+                SourceAssetPath = sourceAssetPath;
+                DestinationAssetPath = destinationAssetPath;
+            }
+        }
+
         internal delegate bool ConflictResolverDelegate(
             SyncConfig config,
             IReadOnlyList<SyncConflict> conflicts,
@@ -588,6 +600,78 @@ namespace Nyorowrl.AssetSync.Editor
             var destinationIgnorePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             BuildIgnorePathSets(config, sourceIgnorePaths, destinationIgnorePaths);
             return destinationIgnorePaths;
+        }
+
+        internal static IReadOnlyList<PreviewCopyEntry> CollectCopyPreviewEntries(
+            SyncConfig config,
+            bool includeUnchanged = false)
+        {
+            if (config == null)
+                return Array.Empty<PreviewCopyEntry>();
+            if (string.IsNullOrEmpty(config.sourcePath) || string.IsNullOrEmpty(config.destinationPath))
+                return Array.Empty<PreviewCopyEntry>();
+            if (!AssetDatabase.IsValidFolder(config.sourcePath) || !AssetDatabase.IsValidFolder(config.destinationPath))
+                return Array.Empty<PreviewCopyEntry>();
+
+            var warningProbe = new SyncConfig
+            {
+                enabled = true,
+                includeSubdirectories = config.includeSubdirectories,
+                sourcePath = config.sourcePath,
+                destinationPath = config.destinationPath
+            };
+            if (TryGetConfigWarning(warningProbe, out _))
+                return Array.Empty<PreviewCopyEntry>();
+
+            string srcRoot = ToFullPath(config.sourcePath);
+            string dstRoot = ToFullPath(config.destinationPath);
+
+            var sourceIgnorePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var destinationIgnorePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            BuildIgnorePathSets(config, sourceIgnorePaths, destinationIgnorePaths);
+
+            var synced = new HashSet<string>(
+                (config.syncRelativePaths ?? new List<string>())
+                    .Where(p => !string.IsNullOrWhiteSpace(p))
+                    .Select(NormalizeRelativePath)
+                    .Where(p => !string.IsNullOrEmpty(p)),
+                StringComparer.OrdinalIgnoreCase);
+
+            var candidates = CollectSourceCandidates(
+                config,
+                srcRoot,
+                dstRoot,
+                config.sourcePath,
+                config.destinationPath,
+                sourceIgnorePaths);
+
+            var result = new List<PreviewCopyEntry>();
+            foreach (var candidate in candidates.OrderBy(c => c.NormalizedRelativePath, StringComparer.OrdinalIgnoreCase))
+            {
+                string rel = candidate.NormalizedRelativePath;
+                if (destinationIgnorePaths.Contains(rel))
+                    continue;
+
+                bool isSynced = synced.Contains(rel);
+                bool destinationExists = File.Exists(candidate.DestinationFilePath);
+                // Unsynced existing destination files are conflict candidates and are excluded from auto-copy preview.
+                if (!isSynced && destinationExists)
+                    continue;
+
+                if (!includeUnchanged && !ShouldCopy(candidate.SourceFilePath, candidate.DestinationFilePath))
+                    continue;
+
+                result.Add(new PreviewCopyEntry(candidate.SourceAssetPath, candidate.DestinationAssetPath));
+            }
+
+            return result;
+        }
+
+        internal static IReadOnlyList<string> CollectCopyPreviewDestinationAssetPaths(SyncConfig config)
+        {
+            return CollectCopyPreviewEntries(config)
+                .Select(e => e.DestinationAssetPath)
+                .ToList();
         }
 
         internal static HashSet<string> CollectSyncedDestinationSyncRelativePaths(SyncConfig config)
