@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Changed
+
+- Reworked the `Filters` editor UI to use a list-style layout consistent with `Ignore Assets`.
+- Updated filter type editing to support SmartAddresser-style single/list mode switching with a right-side mode toggle button.
+- Updated list mode controls from count input to connected `+` / `-` buttons (minimum 1 item enforced).
+- Updated filter mode actions to use connected `Include` / `Exclude` toolbar buttons.
+- Changed unselected type display text from `Select Type...` to `(None)`.
+- Added horizontal margins to `Filters` and `Ignore Assets` sections for clearer spacing.
+- Removed per-element labels from `Ignore Assets` object fields.
+- Updated the type mode toggle icon to use `d_UnityEditor.SceneHierarchyWindow` and centered icon rendering in the button.
+- Preserved bidirectional value synchronization for type mode switching (`singleTypeName` and list index `0`).
+
 ## [1.2.0] - 2026-04-05
 
 ### Added

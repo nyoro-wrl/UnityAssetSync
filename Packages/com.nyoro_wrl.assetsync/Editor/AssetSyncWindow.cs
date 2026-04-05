@@ -12,6 +12,9 @@ namespace Nyorowrl.AssetSync.Editor
     {
         private const string SettingsPathPrefKey = "AssetSync.SettingsPath";
         private const string SelectedConfigIndexPrefKeyPrefix = "AssetSync.SelectedConfigIndex.";
+        private static readonly string[] FilterActionLabels = { "Include", "Exclude" };
+        private const float FilterTypeModeToggleWidth = 30f;
+        private const float ListSectionHorizontalMargin = 6f;
         internal static Func<string, string, string, string, bool> DisplayDialogOverride;
 
         private AssetSyncSettings _settings;
@@ -24,10 +27,13 @@ namespace Nyorowrl.AssetSync.Editor
         [SerializeField] private TreeViewState<int> _treeViewState;
         private ConfigTreeView _configTreeView;
 
-        private readonly Dictionary<FilterCondition, ReorderableList> _typesLists =
-            new Dictionary<FilterCondition, ReorderableList>();
+        private readonly Dictionary<FilterCondition, bool> _filterTypeFoldouts =
+            new Dictionary<FilterCondition, bool>();
+        private readonly Dictionary<SyncConfig, ReorderableList> _filterLists =
+            new Dictionary<SyncConfig, ReorderableList>();
         private readonly Dictionary<SyncConfig, ReorderableList> _ignoreLists =
             new Dictionary<SyncConfig, ReorderableList>();
+        private GUIContent _filterTypeModeToggleContent;
 
         private int SelectedConfigIndex => _configTreeView?.SelectedIndex ?? -1;
 
@@ -105,7 +111,8 @@ namespace Nyorowrl.AssetSync.Editor
                 _settings = (AssetSyncSettings)EditorGUILayout.ObjectField("Settings", _settings, typeof(AssetSyncSettings), false);
                 if (EditorGUI.EndChangeCheck())
                 {
-                    _typesLists.Clear();
+                    _filterTypeFoldouts.Clear();
+                    _filterLists.Clear();
                     _ignoreLists.Clear();
                     string path = _settings != null ? AssetDatabase.GetAssetPath(_settings) : "";
                     EditorPrefs.SetString(SettingsPathPrefKey, path);
@@ -127,7 +134,8 @@ namespace Nyorowrl.AssetSync.Editor
                         AssetDatabase.CreateAsset(newSettings, path);
                         AssetDatabase.SaveAssets();
                         _settings = newSettings;
-                        _typesLists.Clear();
+                        _filterTypeFoldouts.Clear();
+                        _filterLists.Clear();
                         _ignoreLists.Clear();
                         EditorPrefs.SetString(SettingsPathPrefKey, path);
                         RebuildTreeView();
@@ -305,9 +313,9 @@ namespace Nyorowrl.AssetSync.Editor
                     }
 
                     EditorGUILayout.Space();
-                    DrawFilterList(config);
+                    DrawListSectionWithHorizontalMargin(() => DrawFilterList(config));
                     EditorGUILayout.Space();
-                    DrawIgnoreList(config);
+                    DrawListSectionWithHorizontalMargin(() => DrawIgnoreList(config));
                 }
 
                 if (!config.isSyncActivated)
@@ -319,133 +327,271 @@ namespace Nyorowrl.AssetSync.Editor
 
         private void DrawFilterList(SyncConfig config)
         {
-            EnsureConfigCollections(config);
+            config.filters ??= new List<FilterCondition>();
+            GetOrCreateFilterList(config).DoLayoutList();
+        }
+
+        private static void DrawListSectionWithHorizontalMargin(Action drawAction)
+        {
+            if (drawAction == null)
+                return;
 
             using (new EditorGUILayout.HorizontalScope())
             {
-                EditorGUILayout.LabelField("Filters", EditorStyles.boldLabel);
-                GUILayout.FlexibleSpace();
-                var addIcon = EditorGUIUtility.IconContent("d_Toolbar Plus");
-                addIcon.tooltip = "Add Filter";
-                if (GUILayout.Button(addIcon, EditorStyles.iconButton))
+                GUILayout.Space(ListSectionHorizontalMargin);
+                using (new EditorGUILayout.VerticalScope())
                 {
-                    Undo.RecordObject(_settings, "Add Filter");
-                    config.filters.Add(new FilterCondition());
-                    ApplyConfigChange(config);
+                    drawAction.Invoke();
                 }
-            }
-
-            int deleteIndex = -1;
-            for (int i = 0; i < config.filters.Count; i++)
-            {
-                config.filters[i] ??= new FilterCondition();
-                DrawFilterCondition(config.filters[i], i, ref deleteIndex, config);
-            }
-
-            if (deleteIndex >= 0)
-            {
-                Undo.RecordObject(_settings, "Delete Filter");
-                _typesLists.Remove(config.filters[deleteIndex]);
-                config.filters.RemoveAt(deleteIndex);
-                ApplyConfigChange(config);
+                GUILayout.Space(ListSectionHorizontalMargin);
             }
         }
 
-        private void DrawFilterCondition(FilterCondition filter, int index, ref int deleteIndex, SyncConfig config)
+        private ReorderableList GetOrCreateFilterList(SyncConfig config)
         {
-            filter.multipleTypeNames ??= new List<string>();
-
-            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+            if (_filterLists.TryGetValue(config, out var existing))
             {
-
-                using (new EditorGUILayout.HorizontalScope())
-                {
-                    EditorGUI.BeginChangeCheck();
-                    bool newInvert = EditorGUILayout.Toggle("Exclude", filter.invert);
-                    if (EditorGUI.EndChangeCheck())
-                    {
-                        Undo.RecordObject(_settings, "Toggle Filter Mode");
-                        filter.invert = newInvert;
-                        ApplyConfigChange(config);
-                    }
-                    GUILayout.FlexibleSpace();
-                    var deleteFilterIcon = EditorGUIUtility.IconContent("CrossIcon");
-                    deleteFilterIcon.tooltip = "Delete Filter";
-                    if (GUILayout.Button(deleteFilterIcon, EditorStyles.iconButton))
-                        deleteIndex = index;
-                }
-
-                EditorGUI.BeginChangeCheck();
-                bool newUseMultipleTypes = EditorGUILayout.Toggle("Multiple Types", filter.useMultipleTypes);
-                if (EditorGUI.EndChangeCheck())
-                {
-                    Undo.RecordObject(_settings, "Change Filter Mode");
-                    if (newUseMultipleTypes)
-                    {
-                        filter.multipleTypeNames.Clear();
-                        if (!string.IsNullOrEmpty(filter.singleTypeName))
-                            filter.multipleTypeNames.Add(filter.singleTypeName);
-                    }
-                    else
-                    {
-                        filter.singleTypeName = filter.multipleTypeNames.Count > 0
-                            ? filter.multipleTypeNames[0] : "";
-                    }
-                    filter.useMultipleTypes = newUseMultipleTypes;
-                    _typesLists.Remove(filter);
-                    ApplyConfigChange(config);
-                }
-
-                EditorGUILayout.LabelField("Type", EditorStyles.miniLabel);
-                if (filter.useMultipleTypes)
-                {
-                    GetOrCreateTypesList(filter, config).DoLayoutList();
-                }
-                else
-                {
-                    string typeDisplay = string.IsNullOrEmpty(filter.singleTypeName)
-                        ? "Select Type..."
-                        : NicifyTypeName(filter.singleTypeName);
-                    if (GUILayout.Button(typeDisplay, EditorStyles.popup))
-                    {
-                        var dropdown = new TypeSelectorDropdown(new AdvancedDropdownState(),
-                            n =>
-                            {
-                                Undo.RecordObject(_settings, "Change Type");
-                                filter.singleTypeName = n;
-                                ApplyConfigChange(config);
-                            });
-                        dropdown.Show(GUILayoutUtility.GetLastRect());
-                    }
-                }
-            }
-        }
-
-        private void DrawIgnoreList(SyncConfig config)
-        {
-            config.ignoreGuids ??= new List<string>();
-            GetOrCreateIgnoreList(config).DoLayoutList();
-        }
-
-        private ReorderableList GetOrCreateTypesList(FilterCondition filter, SyncConfig config)
-        {
-            if (_typesLists.TryGetValue(filter, out var existing))
+                existing.list = config.filters;
                 return existing;
+            }
 
-            var list = new ReorderableList(filter.multipleTypeNames, typeof(string),
+            var list = new ReorderableList(config.filters, typeof(FilterCondition),
                 draggable: true, displayHeader: true, displayAddButton: true, displayRemoveButton: true);
 
-            list.drawHeaderCallback = rect => EditorGUI.LabelField(rect, "Types");
-            list.elementHeight = EditorGUIUtility.singleLineHeight + 2;
+            list.drawHeaderCallback = rect => EditorGUI.LabelField(rect, "Filters");
+            list.elementHeightCallback = index => GetFilterElementHeight(config, index);
 
-            list.drawElementCallback = (rect, i, isActive, isFocused) =>
+            list.drawElementCallback = (rect, index, isActive, isFocused) =>
             {
-                if (i >= filter.multipleTypeNames.Count) return;
+                if (index < 0 || index >= config.filters.Count)
+                    return;
+
+                var filter = config.filters[index] ??= new FilterCondition();
+                DrawFilterElement(rect, filter, config);
+            };
+
+            list.onAddCallback = _ =>
+            {
+                Undo.RecordObject(_settings, "Add Filter");
+                config.filters.Add(new FilterCondition());
+                ApplyConfigChange(config);
+            };
+
+            list.onRemoveCallback = _ =>
+            {
+                if (list.index < 0 || list.index >= config.filters.Count)
+                    return;
+
+                Undo.RecordObject(_settings, "Delete Filter");
+                FilterCondition removedFilter = config.filters[list.index];
+                _filterTypeFoldouts.Remove(removedFilter);
+                config.filters.RemoveAt(list.index);
+                ApplyConfigChange(config);
+            };
+
+            _filterLists[config] = list;
+            return list;
+        }
+
+        private float GetFilterElementHeight(SyncConfig config, int index)
+        {
+            const float itemMargin = 8f;
+            const float outerPadding = 6f;
+            float lineHeight = EditorGUIUtility.singleLineHeight;
+            float rowSpacing = EditorGUIUtility.standardVerticalSpacing;
+
+            if (index < 0 || index >= config.filters.Count)
+                return lineHeight + (outerPadding * 2f) + (itemMargin * 2f);
+
+            FilterCondition filter = config.filters[index] ??= new FilterCondition();
+            filter.multipleTypeNames ??= new List<string>();
+
+            float contentHeight = lineHeight + rowSpacing; // action
+            if (filter.useMultipleTypes)
+            {
+                contentHeight += lineHeight;
+                if (GetFilterTypeFoldout(filter))
+                {
+                    int count = filter.multipleTypeNames.Count;
+                    if (count > 0)
+                    {
+                        contentHeight += rowSpacing;
+                        contentHeight += count * lineHeight;
+                        contentHeight += (count - 1) * rowSpacing;
+                    }
+                }
+            }
+            else
+            {
+                contentHeight += lineHeight;
+            }
+
+            return contentHeight + (outerPadding * 2f) + (itemMargin * 2f);
+        }
+
+        private void DrawFilterElement(Rect rect, FilterCondition filter, SyncConfig config)
+        {
+            filter.multipleTypeNames ??= new List<string>();
+            float lineHeight = EditorGUIUtility.singleLineHeight;
+            float rowSpacing = EditorGUIUtility.standardVerticalSpacing;
+            const float itemMargin = 8f;
+            const float outerPadding = 6f;
+            const float innerPadding = 8f;
+            const float labelWidth = 120f;
+            const float actionToolbarWidth = 180f;
+
+            var containerRect = new Rect(
+                rect.x,
+                rect.y + itemMargin,
+                rect.width,
+                Mathf.Max(0f, rect.height - (itemMargin * 2f)));
+            Color containerColor = new Color(0f, 0f, 0f, 0.18f);
+            EditorGUI.DrawRect(containerRect, containerColor);
+            Color borderColor = new Color(1f, 1f, 1f, 0.14f);
+            EditorGUI.DrawRect(new Rect(containerRect.x, containerRect.y, containerRect.width, 1f), borderColor);
+            EditorGUI.DrawRect(new Rect(containerRect.x, containerRect.yMax - 1f, containerRect.width, 1f), borderColor);
+            EditorGUI.DrawRect(new Rect(containerRect.x, containerRect.y, 1f, containerRect.height), borderColor);
+            EditorGUI.DrawRect(new Rect(containerRect.xMax - 1f, containerRect.y, 1f, containerRect.height), borderColor);
+
+            var contentRect = new Rect(
+                containerRect.x + innerPadding,
+                containerRect.y + outerPadding,
+                containerRect.width - (innerPadding * 2f),
+                containerRect.height - (outerPadding * 2f));
+            float y = contentRect.y;
+            float fieldWidth = Mathf.Max(0f, contentRect.width - labelWidth);
+
+            EditorGUI.BeginChangeCheck();
+            var actionLabelRect = new Rect(contentRect.x, y, labelWidth, lineHeight);
+            var actionFieldRect = new Rect(
+                contentRect.x + labelWidth,
+                y,
+                Mathf.Min(fieldWidth, actionToolbarWidth),
+                lineHeight);
+            EditorGUI.LabelField(actionLabelRect, "Action");
+            int actionSelected = filter.invert ? 1 : 0;
+            int newActionSelected = GUI.Toolbar(actionFieldRect, actionSelected, FilterActionLabels);
+            if (EditorGUI.EndChangeCheck())
+            {
+                Undo.RecordObject(_settings, "Change Filter");
+                filter.invert = newActionSelected == 1;
+                ApplyConfigChange(config);
+            }
+
+            y += lineHeight + rowSpacing;
+            DrawTypeField(contentRect.x, ref y, labelWidth, fieldWidth, lineHeight, rowSpacing, filter, config);
+        }
+
+        private void DrawTypeField(float x, ref float y, float labelWidth, float fieldWidth, float lineHeight,
+            float rowSpacing, FilterCondition filter, SyncConfig config)
+        {
+            const float spacing = 2f;
+            var labelRect = new Rect(x, y, labelWidth, lineHeight);
+
+            float fieldX = x + labelWidth;
+            float valueWidth = Mathf.Max(0f, fieldWidth - FilterTypeModeToggleWidth - spacing);
+            var valueRect = new Rect(fieldX, y, valueWidth, lineHeight);
+            var toggleRect = new Rect(valueRect.xMax + spacing, y, FilterTypeModeToggleWidth, lineHeight);
+
+            if (!filter.useMultipleTypes)
+            {
+                EditorGUI.LabelField(labelRect, "Type");
+                string typeDisplay = string.IsNullOrEmpty(filter.singleTypeName)
+                    ? "(None)"
+                    : NicifyTypeName(filter.singleTypeName);
+                if (GUI.Button(valueRect, typeDisplay, EditorStyles.popup))
+                {
+                    var dropdown = new TypeSelectorDropdown(new AdvancedDropdownState(),
+                        n =>
+                        {
+                            Undo.RecordObject(_settings, "Change Type");
+                            filter.singleTypeName = n;
+                            ApplyConfigChange(config);
+                        });
+                    dropdown.Show(valueRect);
+                }
+
+                using (var ccs = new EditorGUI.ChangeCheckScope())
+                {
+                    bool nextIsListMode = DrawFilterTypeModeToggle(
+                        toggleRect,
+                        filter.useMultipleTypes,
+                        GetFilterTypeModeToggleContent());
+                    if (ccs.changed && nextIsListMode != filter.useMultipleTypes)
+                    {
+                        Undo.RecordObject(_settings, "Change Type Mode");
+                        SwitchFilterTypeMode(filter, nextIsListMode);
+                        SetFilterTypeFoldout(filter, true);
+                        ApplyConfigChange(config);
+                    }
+                }
+                return;
+            }
+
+            bool foldout = GetFilterTypeFoldout(filter);
+            bool nextFoldout = EditorGUI.Foldout(labelRect, foldout, "Type", true);
+            if (nextFoldout != foldout)
+                SetFilterTypeFoldout(filter, nextFoldout);
+
+            const float listSizeButtonWidth = 25f;
+            float buttonWidth = Mathf.Round(listSizeButtonWidth);
+            float listButtonsWidth = buttonWidth * 2f;
+            float buttonsStartX = Mathf.Floor(Mathf.Max(valueRect.x, valueRect.xMax - listButtonsWidth));
+            var plusRect = new Rect(
+                buttonsStartX,
+                y,
+                buttonWidth,
+                lineHeight);
+            var minusRect = new Rect(plusRect.xMax, y, buttonWidth, lineHeight);
+            GUIStyle plusButtonStyle = EditorStyles.miniButtonLeft;
+            GUIStyle minusButtonStyle = EditorStyles.miniButtonRight;
+
+            if (GUI.Button(plusRect, "+", plusButtonStyle))
+            {
+                Undo.RecordObject(_settings, "Add Type");
+                filter.multipleTypeNames.Add(string.Empty);
+                ApplyConfigChange(config);
+            }
+
+            using (new EditorGUI.DisabledScope(filter.multipleTypeNames.Count <= 1))
+            {
+                if (GUI.Button(minusRect, "-", minusButtonStyle))
+                {
+                    Undo.RecordObject(_settings, "Remove Type");
+                    filter.multipleTypeNames.RemoveAt(filter.multipleTypeNames.Count - 1);
+                    ApplyConfigChange(config);
+                }
+            }
+
+            using (var ccs = new EditorGUI.ChangeCheckScope())
+            {
+                bool nextIsListMode = DrawFilterTypeModeToggle(
+                    toggleRect,
+                    filter.useMultipleTypes,
+                    GetFilterTypeModeToggleContent());
+                if (ccs.changed && nextIsListMode != filter.useMultipleTypes)
+                {
+                    Undo.RecordObject(_settings, "Change Type Mode");
+                    SwitchFilterTypeMode(filter, nextIsListMode);
+                    ApplyConfigChange(config);
+                    return;
+                }
+            }
+
+            if (!nextFoldout)
+                return;
+
+            y += lineHeight + rowSpacing;
+            for (int i = 0; i < filter.multipleTypeNames.Count; i++)
+            {
+                var elementLabelRect = new Rect(x, y, labelWidth, lineHeight);
+                var elementFieldRect = new Rect(fieldX, y, fieldWidth, lineHeight);
+                EditorGUI.LabelField(elementLabelRect, $"Element {i}");
                 string display = string.IsNullOrEmpty(filter.multipleTypeNames[i])
-                    ? "Select Type..." : NicifyTypeName(filter.multipleTypeNames[i]);
-                var btnRect = new Rect(rect.x, rect.y + 1, rect.width, rect.height - 2);
+                    ? "(None)"
+                    : NicifyTypeName(filter.multipleTypeNames[i]);
                 int captured = i;
-                if (GUI.Button(btnRect, display, EditorStyles.popup))
+                if (GUI.Button(elementFieldRect, display, EditorStyles.popup))
                 {
                     var dropdown = new TypeSelectorDropdown(new AdvancedDropdownState(),
                         n =>
@@ -454,35 +600,108 @@ namespace Nyorowrl.AssetSync.Editor
                             filter.multipleTypeNames[captured] = n;
                             ApplyConfigChange(config);
                         });
-                    dropdown.Show(btnRect);
+                    dropdown.Show(elementFieldRect);
                 }
-            };
 
-            list.onAddCallback = _ =>
+                if (i < filter.multipleTypeNames.Count - 1)
+                    y += lineHeight + rowSpacing;
+            }
+        }
+
+        private static void SwitchFilterTypeMode(FilterCondition filter, bool listMode)
+        {
+            filter.multipleTypeNames ??= new List<string>();
+            if (filter.useMultipleTypes == listMode)
+                return;
+
+            if (listMode)
             {
-                Undo.RecordObject(_settings, "Add Type");
-                filter.multipleTypeNames.Add("");
-                ApplyConfigChange(config);
-            };
-
-            list.onRemoveCallback = _ =>
+                if (filter.multipleTypeNames.Count == 0)
+                    filter.multipleTypeNames.Add(filter.singleTypeName ?? string.Empty);
+                else
+                    filter.multipleTypeNames[0] = filter.singleTypeName ?? string.Empty;
+            }
+            else
             {
-                if (list.index >= 0 && list.index < filter.multipleTypeNames.Count)
-                {
-                    Undo.RecordObject(_settings, "Remove Type");
-                    filter.multipleTypeNames.RemoveAt(list.index);
-                    ApplyConfigChange(config);
-                }
-            };
+                if (filter.multipleTypeNames.Count > 0)
+                    filter.singleTypeName = filter.multipleTypeNames[0];
+            }
 
-            _typesLists[filter] = list;
-            return list;
+            filter.useMultipleTypes = listMode;
+        }
+
+        private bool GetFilterTypeFoldout(FilterCondition filter)
+        {
+            if (_filterTypeFoldouts.TryGetValue(filter, out bool foldout))
+                return foldout;
+
+            _filterTypeFoldouts[filter] = true;
+            return true;
+        }
+
+        private void SetFilterTypeFoldout(FilterCondition filter, bool foldout)
+        {
+            _filterTypeFoldouts[filter] = foldout;
+        }
+
+        private GUIContent GetFilterTypeModeToggleContent()
+        {
+            if (_filterTypeModeToggleContent != null)
+                return _filterTypeModeToggleContent;
+
+            const string iconKey = "d_UnityEditor.SceneHierarchyWindow";
+            Texture iconTexture =
+                (EditorGUIUtility.IconContent(iconKey)?.image as Texture)
+                ?? EditorGUIUtility.FindTexture(iconKey)
+                ?? (EditorGUIUtility.Load(iconKey) as Texture)
+                ?? (EditorGUIUtility.Load(iconKey + ".png") as Texture);
+
+            if (iconTexture != null)
+            {
+                _filterTypeModeToggleContent = new GUIContent(iconTexture, "Toggle single/list mode");
+                return _filterTypeModeToggleContent;
+            }
+
+            _filterTypeModeToggleContent = new GUIContent("L", "Toggle single/list mode");
+            return _filterTypeModeToggleContent;
+        }
+
+        private static bool DrawFilterTypeModeToggle(Rect rect, bool value, GUIContent content)
+        {
+            GUIContent buttonContent = content != null && content.image != null
+                ? new GUIContent(string.Empty, content.tooltip)
+                : content ?? GUIContent.none;
+
+            bool nextValue = GUI.Toggle(rect, value, buttonContent, GUI.skin.button);
+
+            if (content != null && content.image != null && Event.current.type == EventType.Repaint)
+            {
+                const float iconPadding = 2f;
+                float iconSize = Mathf.Max(0f, Mathf.Min(rect.width, rect.height) - (iconPadding * 2f));
+                var iconRect = new Rect(
+                    rect.x + ((rect.width - iconSize) * 0.5f),
+                    rect.y + ((rect.height - iconSize) * 0.5f),
+                    iconSize,
+                    iconSize);
+                GUI.DrawTexture(iconRect, content.image, ScaleMode.ScaleToFit, true);
+            }
+
+            return nextValue;
+        }
+
+        private void DrawIgnoreList(SyncConfig config)
+        {
+            config.ignoreGuids ??= new List<string>();
+            GetOrCreateIgnoreList(config).DoLayoutList();
         }
 
         private ReorderableList GetOrCreateIgnoreList(SyncConfig config)
         {
             if (_ignoreLists.TryGetValue(config, out var existing))
+            {
+                existing.list = config.ignoreGuids;
                 return existing;
+            }
 
             config.ignoreGuids ??= new List<string>();
 
@@ -505,7 +724,7 @@ namespace Nyorowrl.AssetSync.Editor
 
                 var fieldRect = new Rect(rect.x, rect.y + 1, rect.width, EditorGUIUtility.singleLineHeight);
                 EditorGUI.BeginChangeCheck();
-                var next = EditorGUI.ObjectField(fieldRect, $"Element {index}", current, typeof(UnityEngine.Object), false);
+                var next = EditorGUI.ObjectField(fieldRect, current, typeof(UnityEngine.Object), false);
                 if (EditorGUI.EndChangeCheck())
                 {
                     Undo.RecordObject(_settings, "Change Ignore Asset");
@@ -559,7 +778,8 @@ namespace Nyorowrl.AssetSync.Editor
             Undo.RecordObject(_settings, "Delete Config");
             _settings.syncConfigs.RemoveAt(idx);
             EditorUtility.SetDirty(_settings);
-            _typesLists.Clear();
+            _filterTypeFoldouts.Clear();
+            _filterLists.Clear();
             _ignoreLists.Clear();
 
             _configTreeView.Reload();
