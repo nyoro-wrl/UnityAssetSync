@@ -166,14 +166,17 @@ namespace Nyorowrl.AssetSync.Editor
             stateChanged = false;
             fileSystemChanged = false;
 
-            if (config.syncRelativePaths == null || config.syncRelativePaths.Count == 0)
+            bool hasSyncedFiles = config.syncRelativePaths != null && config.syncRelativePaths.Count > 0;
+            bool hasSyncedDirectories = config.syncRelativeDirectoryPaths != null && config.syncRelativeDirectoryPaths.Count > 0;
+            if (!hasSyncedFiles && !hasSyncedDirectories)
                 return;
 
             if (string.IsNullOrEmpty(config.destinationPath))
                 return;
 
             string dstRoot = ToFullPath(config.destinationPath);
-            var synced = new HashSet<string>(config.syncRelativePaths, StringComparer.OrdinalIgnoreCase);
+            var synced = new HashSet<string>(config.syncRelativePaths ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
+            var syncedDirectories = new HashSet<string>(config.syncRelativeDirectoryPaths ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
             var sourceIgnore = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var destinationIgnore = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             BuildIgnorePathSets(config, sourceIgnore, destinationIgnore);
@@ -185,7 +188,7 @@ namespace Nyorowrl.AssetSync.Editor
                 {
                     string relSystem = NormalizedRelativePathToSystemPath(rel);
                     string dstFile = Path.Combine(dstRoot, relSystem);
-                    if (DeleteFileAndMeta(dstFile))
+                    if (DeleteManagedDestinationFileAndCleanupEmptyDirectories(dstFile, dstRoot))
                         fileSystemChanged = true;
 
                     synced.Remove(rel);
@@ -193,15 +196,33 @@ namespace Nyorowrl.AssetSync.Editor
                 }
             }
 
+            foreach (string rel in syncedDirectories.OrderByDescending(p => p.Length).ToList())
+            {
+                if (destinationIgnore.Contains(rel))
+                    continue;
+
+                string relSystem = NormalizedRelativePathToSystemPath(rel);
+                string dstDirectory = Path.Combine(dstRoot, relSystem);
+                if (DeleteManagedDestinationDirectoryAndCleanupEmptyParents(dstDirectory, dstRoot))
+                    fileSystemChanged = true;
+
+                syncedDirectories.Remove(rel);
+                stateChanged = true;
+            }
+
             stateChanged |= SetSyncPaths(config, synced);
+            stateChanged |= SetSyncDirectoryPaths(config, syncedDirectories);
         }
 
         internal static bool PruneSyncPathsForDisabledConfig(SyncConfig config)
         {
-            if (config?.syncRelativePaths == null || config.syncRelativePaths.Count == 0)
+            bool hasSyncedFiles = config?.syncRelativePaths != null && config.syncRelativePaths.Count > 0;
+            bool hasSyncedDirectories = config?.syncRelativeDirectoryPaths != null && config.syncRelativeDirectoryPaths.Count > 0;
+            if (!hasSyncedFiles && !hasSyncedDirectories)
                 return false;
 
-            var synced = new HashSet<string>(config.syncRelativePaths, StringComparer.OrdinalIgnoreCase);
+            var synced = new HashSet<string>(config.syncRelativePaths ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
+            var syncedDirectories = new HashSet<string>(config.syncRelativeDirectoryPaths ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
             HashSet<string> destinationIgnore = CollectDestinationIgnoreRelativePaths(config);
 
             bool removedAny = false;
@@ -214,10 +235,21 @@ namespace Nyorowrl.AssetSync.Editor
                 removedAny = true;
             }
 
+            foreach (string rel in syncedDirectories.ToList())
+            {
+                if (destinationIgnore.Contains(rel))
+                    continue;
+
+                syncedDirectories.Remove(rel);
+                removedAny = true;
+            }
+
             if (!removedAny)
                 return false;
 
-            return SetSyncPaths(config, synced);
+            bool changed = SetSyncPaths(config, synced);
+            changed |= SetSyncDirectoryPaths(config, syncedDirectories);
+            return changed;
         }
 
         private static bool ValidateSyncConfig(SyncConfig config)
@@ -259,6 +291,7 @@ namespace Nyorowrl.AssetSync.Editor
             int copiedCount = 0;
 
             var synced = new HashSet<string>(config.syncRelativePaths ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
+            var syncedDirectories = new HashSet<string>(config.syncRelativeDirectoryPaths ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
             var candidates = CollectSourceCandidates(config, srcRoot, dstRoot, srcAssetRoot, dstAssetRoot, sourceIgnorePaths);
 
             int resolutionIterations = 0;
@@ -269,6 +302,7 @@ namespace Nyorowrl.AssetSync.Editor
                 {
                     Debug.LogWarning($"[AssetSync] '{config.configName}': Conflict resolution reached maximum retries. Sync cancelled.");
                     stateChanged |= SetSyncPaths(config, synced);
+                    stateChanged |= SetSyncDirectoryPaths(config, syncedDirectories);
                     return copiedCount;
                 }
 
@@ -305,6 +339,7 @@ namespace Nyorowrl.AssetSync.Editor
                 if (!TryResolveConflicts(config, conflicts, out var decisions))
                 {
                     stateChanged |= SetSyncPaths(config, synced);
+                    stateChanged |= SetSyncDirectoryPaths(config, syncedDirectories);
                     return copiedCount;
                 }
 
@@ -346,6 +381,7 @@ namespace Nyorowrl.AssetSync.Editor
                 if (!anyDecisionApplied)
                 {
                     stateChanged |= SetSyncPaths(config, synced);
+                    stateChanged |= SetSyncDirectoryPaths(config, syncedDirectories);
                     return copiedCount;
                 }
 
@@ -374,7 +410,7 @@ namespace Nyorowrl.AssetSync.Editor
 
                 if (!File.Exists(srcFile))
                 {
-                    if (DeleteFileAndMeta(dstFile))
+                    if (DeleteManagedDestinationFileAndCleanupEmptyDirectories(dstFile, dstRoot))
                         fileSystemChanged = true;
                     synced.Remove(rel);
                     stateChanged = true;
@@ -384,7 +420,7 @@ namespace Nyorowrl.AssetSync.Editor
                 if (!inScope || filteredOut || sourceIgnore)
                 {
                     bool shouldDelete = File.Exists(dstFile) && !ShouldCopy(srcFile, dstFile);
-                    if (shouldDelete && DeleteFileAndMeta(dstFile))
+                    if (shouldDelete && DeleteManagedDestinationFileAndCleanupEmptyDirectories(dstFile, dstRoot))
                         fileSystemChanged = true;
 
                     synced.Remove(rel);
@@ -401,8 +437,79 @@ namespace Nyorowrl.AssetSync.Editor
                 }
             }
 
+            SyncManagedDestinationDirectories(
+                config,
+                srcRoot,
+                dstRoot,
+                sourceIgnorePaths,
+                destinationIgnorePaths,
+                syncedDirectories,
+                ref stateChanged,
+                ref fileSystemChanged);
+
             stateChanged |= SetSyncPaths(config, synced);
+            stateChanged |= SetSyncDirectoryPaths(config, syncedDirectories);
             return copiedCount;
+        }
+
+        private static void SyncManagedDestinationDirectories(
+            SyncConfig config,
+            string srcRoot,
+            string dstRoot,
+            HashSet<string> sourceIgnorePaths,
+            HashSet<string> destinationIgnorePaths,
+            HashSet<string> syncedDirectories,
+            ref bool stateChanged,
+            ref bool fileSystemChanged)
+        {
+            var sourceDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (config.includeSubdirectories)
+            {
+                foreach (string sourceDirectory in Directory.GetDirectories(srcRoot, "*", SearchOption.AllDirectories))
+                {
+                    string relPath = sourceDirectory.Substring(srcRoot.Length).TrimStart(Path.DirectorySeparatorChar, '/');
+                    string normalizedRel = NormalizeRelativePath(relPath);
+                    if (string.IsNullOrEmpty(normalizedRel))
+                        continue;
+                    if (!IsWithinSyncScope(normalizedRel, config.includeSubdirectories))
+                        continue;
+                    if (sourceIgnorePaths.Contains(normalizedRel))
+                        continue;
+                    if (destinationIgnorePaths.Contains(normalizedRel))
+                        continue;
+
+                    string destinationDirectory = Path.Combine(dstRoot, NormalizedRelativePathToSystemPath(normalizedRel));
+                    if (File.Exists(destinationDirectory))
+                        continue;
+
+                    sourceDirectories.Add(normalizedRel);
+                    if (!Directory.Exists(destinationDirectory))
+                    {
+                        Directory.CreateDirectory(destinationDirectory);
+                        fileSystemChanged = true;
+                    }
+
+                    if (syncedDirectories.Add(normalizedRel))
+                        stateChanged = true;
+                }
+            }
+
+            foreach (string rel in syncedDirectories.OrderByDescending(p => p.Length).ToList())
+            {
+                if (destinationIgnorePaths.Contains(rel))
+                    continue;
+
+                bool shouldKeep = config.includeSubdirectories && sourceDirectories.Contains(rel);
+                if (shouldKeep)
+                    continue;
+
+                string destinationDirectory = Path.Combine(dstRoot, NormalizedRelativePathToSystemPath(rel));
+                if (DeleteManagedDestinationDirectoryAndCleanupEmptyParents(destinationDirectory, dstRoot))
+                    fileSystemChanged = true;
+
+                syncedDirectories.Remove(rel);
+                stateChanged = true;
+            }
         }
 
         private static List<SourceCandidate> CollectSourceCandidates(
@@ -695,6 +802,27 @@ namespace Nyorowrl.AssetSync.Editor
             return result;
         }
 
+        internal static HashSet<string> CollectSyncedDestinationSyncRelativeDirectoryPaths(SyncConfig config)
+        {
+            var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (config?.syncRelativeDirectoryPaths == null)
+                return result;
+
+            HashSet<string> destinationIgnorePaths = CollectDestinationIgnoreRelativePaths(config);
+            foreach (string relativePath in config.syncRelativeDirectoryPaths)
+            {
+                string normalizedRelativePath = NormalizeRelativePath(relativePath);
+                if (string.IsNullOrEmpty(normalizedRelativePath))
+                    continue;
+                if (destinationIgnorePaths.Contains(normalizedRelativePath))
+                    continue;
+
+                result.Add(normalizedRelativePath);
+            }
+
+            return result;
+        }
+
         internal static HashSet<string> CollectExistingSyncedDestinationFilesForDeletedConfig(SyncConfig config)
         {
             var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -737,7 +865,8 @@ namespace Nyorowrl.AssetSync.Editor
                 return false;
 
             HashSet<string> syncedDestinationPaths = CollectSyncedDestinationSyncRelativePaths(config);
-            if (syncedDestinationPaths.Count == 0)
+            HashSet<string> syncedDestinationDirectories = CollectSyncedDestinationSyncRelativeDirectoryPaths(config);
+            if (syncedDestinationPaths.Count == 0 && syncedDestinationDirectories.Count == 0)
                 return false;
 
             string dstRoot = ToFullPath(config.destinationPath);
@@ -747,7 +876,15 @@ namespace Nyorowrl.AssetSync.Editor
             {
                 string relSystem = NormalizedRelativePathToSystemPath(rel);
                 string dstFilePath = Path.Combine(dstRoot, relSystem);
-                if (DeleteFileAndMeta(dstFilePath))
+                if (DeleteManagedDestinationFileAndCleanupEmptyDirectories(dstFilePath, dstRoot))
+                    fileSystemChanged = true;
+            }
+
+            foreach (string rel in syncedDestinationDirectories.OrderByDescending(p => p.Length))
+            {
+                string relSystem = NormalizedRelativePathToSystemPath(rel);
+                string dstDirectoryPath = Path.Combine(dstRoot, relSystem);
+                if (DeleteManagedDestinationDirectoryAndCleanupEmptyParents(dstDirectoryPath, dstRoot))
                     fileSystemChanged = true;
             }
 
@@ -784,6 +921,7 @@ namespace Nyorowrl.AssetSync.Editor
                 return false;
 
             config.syncRelativePaths ??= new List<string>();
+            config.syncRelativeDirectoryPaths ??= new List<string>();
             bool ignoreListInitialized = false;
             if (config.ignoreGuids == null)
             {
@@ -799,13 +937,22 @@ namespace Nyorowrl.AssetSync.Editor
                 .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            bool changed = ignoreListInitialized
-                || !ListEquals(config.syncRelativePaths, normalizedSync, StringComparer.OrdinalIgnoreCase);
+            var normalizedSyncDirectories = config.syncRelativeDirectoryPaths
+                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .Select(NormalizeRelativePath)
+                .Where(p => !string.IsNullOrEmpty(p))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
+                .ToList();
 
-            if (changed)
-            {
+            bool syncChanged = !ListEquals(config.syncRelativePaths, normalizedSync, StringComparer.OrdinalIgnoreCase);
+            bool directoryChanged = !ListEquals(config.syncRelativeDirectoryPaths, normalizedSyncDirectories, StringComparer.OrdinalIgnoreCase);
+            bool changed = ignoreListInitialized || syncChanged || directoryChanged;
+
+            if (syncChanged)
                 config.syncRelativePaths = normalizedSync;
-            }
+            if (directoryChanged)
+                config.syncRelativeDirectoryPaths = normalizedSyncDirectories;
 
             return changed;
         }
@@ -860,6 +1007,106 @@ namespace Nyorowrl.AssetSync.Editor
             {
                 File.Delete(metaFile);
                 changed = true;
+            }
+
+            return changed;
+        }
+
+        private static bool SetSyncDirectoryPaths(SyncConfig config, HashSet<string> syncedDirectories)
+        {
+            config.syncRelativeDirectoryPaths ??= new List<string>();
+            var normalizedSyncDirectories = syncedDirectories
+                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .Select(NormalizeRelativePath)
+                .Where(p => !string.IsNullOrEmpty(p))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            bool changed = !ListEquals(config.syncRelativeDirectoryPaths, normalizedSyncDirectories, StringComparer.OrdinalIgnoreCase);
+            if (changed)
+                config.syncRelativeDirectoryPaths = normalizedSyncDirectories;
+
+            return changed;
+        }
+
+        private static bool DeleteManagedDestinationFileAndCleanupEmptyDirectories(string filePath, string destinationRoot)
+        {
+            bool changed = DeleteFileAndMeta(filePath);
+            if (TryDeleteEmptyParentDirectories(filePath, destinationRoot))
+                changed = true;
+
+            return changed;
+        }
+
+        private static bool DeleteManagedDestinationDirectoryAndCleanupEmptyParents(string directoryPath, string destinationRoot)
+        {
+            bool changed = false;
+            if (TryDeleteDirectoryAndMetaIfEmpty(directoryPath))
+                changed = true;
+            if (TryDeleteEmptyParentDirectories(directoryPath, destinationRoot))
+                changed = true;
+
+            return changed;
+        }
+
+        private static bool TryDeleteDirectoryAndMetaIfEmpty(string directoryPath)
+        {
+            if (!Directory.Exists(directoryPath))
+                return false;
+            if (Directory.EnumerateFileSystemEntries(directoryPath).Any())
+                return false;
+
+            Directory.Delete(directoryPath);
+            bool changed = true;
+
+            string metaPath = directoryPath + ".meta";
+            if (File.Exists(metaPath))
+            {
+                File.Delete(metaPath);
+                changed = true;
+            }
+
+            return changed;
+        }
+
+        private static bool TryDeleteEmptyParentDirectories(string filePath, string rootPath)
+        {
+            if (string.IsNullOrEmpty(filePath) || string.IsNullOrEmpty(rootPath))
+                return false;
+
+            string normalizedRoot = NormalizeFullPath(rootPath);
+            string current = Path.GetDirectoryName(filePath);
+            bool changed = false;
+
+            while (!string.IsNullOrEmpty(current))
+            {
+                string normalizedCurrent = NormalizeFullPath(current);
+                if (PathsEqual(normalizedCurrent, normalizedRoot))
+                    break;
+                if (!IsSubPathOf(normalizedRoot, normalizedCurrent))
+                    break;
+
+                if (Directory.Exists(current) && !Directory.EnumerateFileSystemEntries(current).Any())
+                {
+                    Directory.Delete(current);
+                    changed = true;
+
+                    string metaPath = current + ".meta";
+                    if (File.Exists(metaPath))
+                    {
+                        File.Delete(metaPath);
+                        changed = true;
+                    }
+
+                    current = Path.GetDirectoryName(current);
+                    continue;
+                }
+
+                if (Directory.Exists(current))
+                    break;
+
+                current = Path.GetDirectoryName(current);
             }
 
             return changed;

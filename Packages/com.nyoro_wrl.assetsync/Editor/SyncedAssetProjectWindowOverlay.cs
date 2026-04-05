@@ -83,6 +83,12 @@ namespace Nyorowrl.AssetSync.Editor
                     {
                         AddManagedDestinationPathWithParentFolders(destinationRoot, normalizedRelativePath);
                     }
+
+                    HashSet<string> syncedSyncRelativeDirectories = AssetSyncer.CollectSyncedDestinationSyncRelativeDirectoryPaths(config);
+                    foreach (string normalizedRelativePath in syncedSyncRelativeDirectories)
+                    {
+                        AddManagedDestinationPathWithParentFolders(destinationRoot, normalizedRelativePath);
+                    }
                 }
             }
 

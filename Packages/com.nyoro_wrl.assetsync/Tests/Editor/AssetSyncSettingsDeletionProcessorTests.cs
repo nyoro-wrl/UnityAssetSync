@@ -73,6 +73,79 @@ namespace Nyorowrl.AssetSync.Editor.Tests
         }
 
         [Test]
+        public void TryCleanupSyncedFilesFromDeletedSettingsAsset_RemovesManagedEmptySubdirectory()
+        {
+            WriteSrc("sub/synced.txt", "src");
+            AssetDatabase.Refresh();
+
+            var config = CreateConfig();
+            AssetSyncer.SyncConfig(config);
+            Assert.IsTrue(DstExists("sub/synced.txt"));
+
+            var settings = ScriptableObject.CreateInstance<AssetSyncSettings>();
+            settings.syncConfigs = new List<SyncConfig> { config };
+            string settingsAssetPath = _testRoot + "/SettingsWithSubdir.asset";
+            AssetDatabase.CreateAsset(settings, settingsAssetPath);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+
+            bool changed = AssetSyncSettingsDeletionProcessor.TryCleanupSyncedFilesFromDeletedSettingsAsset(settingsAssetPath);
+
+            Assert.IsTrue(changed);
+            Assert.IsFalse(DstExists("sub/synced.txt"), "synced file should be removed when settings is deleted");
+            Assert.IsFalse(Directory.Exists(Path.Combine(_dstFullPath, "sub")), "empty managed subdirectory should be removed");
+        }
+
+        [Test]
+        public void TryCleanupSyncedFilesFromDeletedSettingsAsset_KeepsSubdirectoryWithManualContent()
+        {
+            WriteSrc("sub/synced.txt", "src");
+            AssetDatabase.Refresh();
+
+            var config = CreateConfig();
+            AssetSyncer.SyncConfig(config);
+            WriteDst("sub/manual.txt", "manual");
+
+            var settings = ScriptableObject.CreateInstance<AssetSyncSettings>();
+            settings.syncConfigs = new List<SyncConfig> { config };
+            string settingsAssetPath = _testRoot + "/SettingsWithManualSubdir.asset";
+            AssetDatabase.CreateAsset(settings, settingsAssetPath);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+
+            bool changed = AssetSyncSettingsDeletionProcessor.TryCleanupSyncedFilesFromDeletedSettingsAsset(settingsAssetPath);
+
+            Assert.IsTrue(changed);
+            Assert.IsFalse(DstExists("sub/synced.txt"), "synced file should be removed when settings is deleted");
+            Assert.IsTrue(DstExists("sub/manual.txt"), "manual destination file must remain");
+            Assert.IsTrue(Directory.Exists(Path.Combine(_dstFullPath, "sub")), "subdirectory with manual content must remain");
+        }
+
+        [Test]
+        public void TryCleanupSyncedFilesFromDeletedSettingsAsset_RemovesManagedEmptySubdirectoryWithoutFiles()
+        {
+            Directory.CreateDirectory(Path.Combine(_srcFullPath, "sub", "empty"));
+            AssetDatabase.Refresh();
+
+            var config = CreateConfig();
+            AssetSyncer.SyncConfig(config);
+            Assert.IsTrue(Directory.Exists(Path.Combine(_dstFullPath, "sub", "empty")));
+
+            var settings = ScriptableObject.CreateInstance<AssetSyncSettings>();
+            settings.syncConfigs = new List<SyncConfig> { config };
+            string settingsAssetPath = _testRoot + "/SettingsWithOnlyEmptyDir.asset";
+            AssetDatabase.CreateAsset(settings, settingsAssetPath);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+
+            bool changed = AssetSyncSettingsDeletionProcessor.TryCleanupSyncedFilesFromDeletedSettingsAsset(settingsAssetPath);
+
+            Assert.IsTrue(changed);
+            Assert.IsFalse(Directory.Exists(Path.Combine(_dstFullPath, "sub", "empty")));
+            Assert.IsFalse(Directory.Exists(Path.Combine(_dstFullPath, "sub")));
+        }
+
+        [Test]
         public void TryCleanupSyncedFilesFromDeletedSettingsAsset_FolderPath_RemovesSyncedFiles()
         {
             WriteSrc("folder_synced.txt", "src");

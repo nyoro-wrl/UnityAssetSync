@@ -1066,7 +1066,8 @@ namespace Nyorowrl.AssetSync.Editor
 
             bool shouldActivate = config.isSyncActivated
                 || config.enabled
-                || (config.syncRelativePaths != null && config.syncRelativePaths.Count > 0);
+                || (config.syncRelativePaths != null && config.syncRelativePaths.Count > 0)
+                || (config.syncRelativeDirectoryPaths != null && config.syncRelativeDirectoryPaths.Count > 0);
             if (shouldActivate == config.isSyncActivated)
                 return;
 
@@ -1184,6 +1185,7 @@ namespace Nyorowrl.AssetSync.Editor
             config.filters ??= new List<FilterCondition>();
             config.ignoreGuids ??= new List<string>();
             config.syncRelativePaths ??= new List<string>();
+            config.syncRelativeDirectoryPaths ??= new List<string>();
         }
 
         private void EnqueueDeferredSync(Action syncAction)
