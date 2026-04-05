@@ -1,11 +1,11 @@
 {
-	"name": "com.nyoro_wrl.assetsync",
-	"displayName": "AssetSync",
-	"version": "1.3.0",
-	"unity": "6000.0",
-	"license": "MIT",
-	"description": "Editor-only asset synchronization tool. Mirrors files from a source folder to a destination folder and supports type-based include/exclude filters.",
-	"author": {
-		"name": "nyoro_wrl"
-	}
+  "name": "com.nyoro_wrl.assetsync",
+  "displayName": "Asset Sync",
+  "version": "1.3.0",
+  "unity": "6000.0",
+  "license": "MIT",
+  "description": "Editor-only asset synchronization tool. Mirrors files from a source folder to a destination folder and supports type-based include/exclude filters.",
+  "author": {
+    "name": "nyoro_wrl"
+  }
 }
