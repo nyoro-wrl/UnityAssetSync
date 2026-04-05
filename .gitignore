@@ -101,3 +101,4 @@ InitTestScene*.unity*
 # Unity rendering default generated assets
 /[Aa]ssets/DefaultVolumeProfile.asset*
 /[Aa]ssets/UniversalRenderPipelineGlobalSettings.asset*
+ProjectSettings/ShaderGraphSettings.asset
