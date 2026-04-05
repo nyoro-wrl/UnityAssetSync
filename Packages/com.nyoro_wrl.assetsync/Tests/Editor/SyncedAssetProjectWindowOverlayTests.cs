@@ -139,5 +139,53 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             string fullPath = _dstAssetPath + "/" + relativePath;
             Assert.IsFalse(syncedPaths.Contains(fullPath), "disabled config should not show synced badge");
         }
+
+        [Test]
+        public void RebuildSyncedPathCache_SyncedNestedPath_AddsDestinationSubfolderBadges()
+        {
+            string projectRoot = Path.GetDirectoryName(Application.dataPath);
+            string relativePath = "sub/inner/file.txt";
+
+            string destinationFilePath = Path.Combine(projectRoot, _dstAssetPath, relativePath.Replace('/', Path.DirectorySeparatorChar));
+            Directory.CreateDirectory(Path.GetDirectoryName(destinationFilePath));
+            File.WriteAllText(destinationFilePath, "dst");
+            AssetDatabase.Refresh();
+
+            var settings = ScriptableObject.CreateInstance<AssetSyncSettings>();
+            settings.syncConfigs = new List<SyncConfig>
+            {
+                new SyncConfig
+                {
+                    configName = "OverlayNestedFolderTest",
+                    enabled = true,
+                    sourcePath = _srcAssetPath,
+                    destinationPath = _dstAssetPath,
+                    syncRelativePaths = new List<string> { relativePath },
+                    ignoreGuids = new List<string>()
+                }
+            };
+
+            string settingsAssetPath = _testRoot + "/AssetSyncOverlayNestedSettings.asset";
+            AssetDatabase.CreateAsset(settings, settingsAssetPath);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+
+            MethodInfo rebuildMethod = typeof(SyncedAssetProjectWindowOverlay)
+                .GetMethod("RebuildSyncedPathCache", BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.IsNotNull(rebuildMethod, "RebuildSyncedPathCache method not found");
+            rebuildMethod.Invoke(null, null);
+
+            FieldInfo pathsField = typeof(SyncedAssetProjectWindowOverlay)
+                .GetField("SyncedAssetPaths", BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.IsNotNull(pathsField, "SyncedAssetPaths field not found");
+
+            var syncedPaths = pathsField.GetValue(null) as HashSet<string>;
+            Assert.IsNotNull(syncedPaths, "SyncedAssetPaths must be a HashSet<string>");
+
+            string destinationRoot = _dstAssetPath;
+            Assert.IsTrue(syncedPaths.Contains(destinationRoot + "/sub"), "managed destination subfolder should show synced badge");
+            Assert.IsTrue(syncedPaths.Contains(destinationRoot + "/sub/inner"), "managed nested destination subfolder should show synced badge");
+            Assert.IsTrue(syncedPaths.Contains(destinationRoot + "/" + relativePath), "managed destination file should show synced badge");
+        }
     }
 }
