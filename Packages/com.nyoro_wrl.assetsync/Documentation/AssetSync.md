@@ -10,35 +10,39 @@ Install this package with the Unity Package Manager.
 
 # Using AssetSync
 
-1. Open `Window > AssetSync`.
+1. Open `Window > Asset Sync`.
 2. Create a new `AssetSyncSettings` asset with the `New` button, or select an existing one.
 3. Add a config from the left panel.
 4. Set `Source` and `Destination` folders.
-5. Set `Include Subdirectories`:
+5. Click `Sync` (bottom-right) to run the initial activation sync.
+   - The button is enabled only when `Source` and `Destination` are valid folders.
+   - After activation, the `Enable` toggle is shown for that config.
+6. Set `Include Subdirectories`:
    - default: `off`
    - `on`: synchronize files under nested folders.
    - `off`: synchronize only files directly under `Source`.
-6. Enable filters if needed:
+7. Enable filters if needed:
    - `Action = Include`: include matching targets.
    - `Action = Exclude`: exclude matching targets.
    - `Target = Type`: select Unity object types.
    - `Target = Asset`: select source assets/folders.
-   - `List Mode = on`: one filter condition can match any of several targets.
-7. Optionally add assets to `Protected`:
-   - destination protected entries are never copied/updated/deleted by sync.
-8. If a destination file already exists as unsynced, resolve it in the conflict dialog with `Overwrite` or `Keep`.
-9. Edit assets in the source folder. AssetSync re-syncs automatically.
+   - `Type` filters support single/list value mode switching.
+8. Optionally add assets to `Ignore`:
+   - destination ignored entries are never copied/updated/deleted by sync.
+9. If a destination file already exists as unsynced, resolve it in the conflict dialog with `Overwrite` or `Keep`.
+10. Edit assets in the source folder. AssetSync re-syncs automatically.
 
 ## Sync behavior
 
 - Copies only files that are new or content-changed.
 - Never copies `.meta` files from source.
 - Tracks synchronized files per config in `SyncConfig.syncRelativePaths` (saved in settings assets).
-- Supports manual `Protected` entries (GUID-based): destination protected files/folders are never copied/updated/deleted.
+- Supports manual `Ignore` entries (GUID-based): destination ignored files/folders are never copied/updated/deleted.
 - Supports filter target kinds `Type` and `Asset`; asset target folders apply recursively to all descendants.
-- If a destination file already exists and is neither sync nor protected, AssetSync opens a conflict dialog to choose `Overwrite` or `Keep`.
-- Disabling a config removes destination files tracked as sync, while preserving manual files and protected destination entries.
-- Synced destination assets are shown with an icon badge in the Project window (excluded for protected entries or disabled configs).
+- If a destination file already exists and is neither sync nor ignored, AssetSync opens a conflict dialog to choose `Overwrite` or `Keep`.
+- Disabling a config removes destination files tracked as sync, while preserving manual files and ignored destination entries.
+- Synced destination assets are shown with an icon badge in the Project window (excluded for ignored entries or disabled configs).
+- `Source` and `Destination` become read-only while the config is enabled after activation.
 - If selected source or destination folders are moved, stored config paths are remapped automatically.
 
 ## Safety rules
@@ -63,5 +67,5 @@ Install this package with the Unity Package Manager.
 | `Editor/ConfigTreeView.cs` | Config list/tree UI. |
 | `Editor/TypeSelectorDropdown.cs` | Type selection dropdown for filters. |
 | `Editor/SyncedAssetProjectWindowOverlay.cs` | Project-window icon overlay for synced destination assets. |
-| `Runtime/*.cs` | Serializable config models (`AssetSyncSettings`, `SyncConfig`, `FilterCondition`) compiled for Editor only. |
+| `Editor/AssetSyncSettings.cs`, `Editor/SyncConfig.cs`, `Editor/FilterCondition.cs` | Serializable config models compiled for Editor only. |
 | `Tests/Editor/*` | Editor tests for sync and filter logic. |

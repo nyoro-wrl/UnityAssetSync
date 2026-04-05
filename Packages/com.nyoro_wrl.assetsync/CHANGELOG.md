@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-04-05
+
 ### Changed
 
 - Reworked the `Filters` editor UI to use a list-style layout consistent with `Ignore Assets`.
@@ -55,7 +57,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Changed
 
-- Changed terminology from `Protected/Owned` to `Ignore/Sync`.
+- Changed terminology from `Ignore/Owned` to `Ignore/Sync`.
 - Changed sync truth source to `SyncConfig` state only (Git-managed settings asset).
 - Changed conflict dialog actions to user-facing `Overwrite` / `Keep` with improved path affordance.
 - Changed disabled-config behavior to remove destination files tracked as `Sync` while preserving destination `Ignore` and manual files.
