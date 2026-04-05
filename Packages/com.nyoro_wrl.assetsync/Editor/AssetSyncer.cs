@@ -610,7 +610,10 @@ namespace Nyorowrl.AssetSync.Editor
                 return Array.Empty<PreviewCopyEntry>();
             if (string.IsNullOrEmpty(config.sourcePath) || string.IsNullOrEmpty(config.destinationPath))
                 return Array.Empty<PreviewCopyEntry>();
-            if (!AssetDatabase.IsValidFolder(config.sourcePath) || !AssetDatabase.IsValidFolder(config.destinationPath))
+
+            string srcRoot = ToFullPath(config.sourcePath);
+            string dstRoot = ToFullPath(config.destinationPath);
+            if (!Directory.Exists(srcRoot))
                 return Array.Empty<PreviewCopyEntry>();
 
             var warningProbe = new SyncConfig
@@ -622,9 +625,6 @@ namespace Nyorowrl.AssetSync.Editor
             };
             if (TryGetConfigWarning(warningProbe, out _))
                 return Array.Empty<PreviewCopyEntry>();
-
-            string srcRoot = ToFullPath(config.sourcePath);
-            string dstRoot = ToFullPath(config.destinationPath);
 
             var sourceIgnorePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var destinationIgnorePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
