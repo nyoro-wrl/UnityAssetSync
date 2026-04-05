@@ -37,10 +37,10 @@ namespace Nyorowrl.AssetSync.Editor
 
         private int SelectedConfigIndex => _configTreeView?.SelectedIndex ?? -1;
 
-        [MenuItem("Window/AssetSync")]
+        [MenuItem("Window/Asset Sync")]
         public static void Open()
         {
-            GetWindow<AssetSyncWindow>("AssetSync");
+            GetWindow<AssetSyncWindow>("Asset Sync");
         }
 
         private void OnEnable()
