@@ -161,7 +161,7 @@ namespace Nyorowrl.AssetSync.Editor
 
         private void AddConfig()
         {
-            Undo.RecordObject(_settings, "Add Config");
+            Undo.RecordObject(_settings, "Add Sync");
             _settings.syncConfigs.Add(new SyncConfig
             {
                 configName = $"Sync {_settings.syncConfigs.Count + 1}",

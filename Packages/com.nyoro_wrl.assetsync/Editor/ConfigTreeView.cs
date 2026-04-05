@@ -53,7 +53,7 @@ namespace Nyorowrl.AssetSync.Editor
                 }
             }
 
-            items.Add(new TreeViewItem<int>(AddRowId, 0, "+ Add Config"));
+            items.Add(new TreeViewItem<int>(AddRowId, 0, "+ Add Sync"));
 
             SetupParentsAndChildrenFromDepths(root, items);
             return root;
