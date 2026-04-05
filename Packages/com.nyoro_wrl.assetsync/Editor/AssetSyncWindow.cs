@@ -37,9 +37,9 @@ namespace Nyorowrl.AssetSync.Editor
             new Dictionary<FilterCondition, bool>();
         private readonly Dictionary<SyncConfig, ReorderableList> _filterLists =
             new Dictionary<SyncConfig, ReorderableList>();
-        private readonly Dictionary<SyncConfig, ReorderableList> _ignoreLists =
+        private readonly Dictionary<SyncConfig, ReorderableList> _protectedLists =
             new Dictionary<SyncConfig, ReorderableList>();
-        private GUIContent _filterTypeModeToggleContent;
+        private GUIContent _filterValueModeToggleContent;
 
         private int SelectedConfigIndex => _configTreeView?.SelectedIndex ?? -1;
 
@@ -119,7 +119,7 @@ namespace Nyorowrl.AssetSync.Editor
                 {
                     _filterTypeFoldouts.Clear();
                     _filterLists.Clear();
-                    _ignoreLists.Clear();
+                    _protectedLists.Clear();
                     string path = _settings != null ? AssetDatabase.GetAssetPath(_settings) : "";
                     EditorPrefs.SetString(SettingsPathPrefKey, path);
                     RebuildTreeView();
@@ -142,7 +142,7 @@ namespace Nyorowrl.AssetSync.Editor
                         _settings = newSettings;
                         _filterTypeFoldouts.Clear();
                         _filterLists.Clear();
-                        _ignoreLists.Clear();
+                        _protectedLists.Clear();
                         EditorPrefs.SetString(SettingsPathPrefKey, path);
                         RebuildTreeView();
                         RestoreOrInitializeConfigSelection();
@@ -321,7 +321,7 @@ namespace Nyorowrl.AssetSync.Editor
                     EditorGUILayout.Space();
                     DrawListSectionWithHorizontalMargin(() => DrawFilterList(config));
                     EditorGUILayout.Space();
-                    DrawListSectionWithHorizontalMargin(() => DrawIgnoreList(config));
+                    DrawListSectionWithHorizontalMargin(() => DrawProtectedList(config));
                     EditorGUILayout.Space();
                     DrawListSectionWithHorizontalMargin(() => DrawCopyPreview(config));
                 }
@@ -380,9 +380,10 @@ namespace Nyorowrl.AssetSync.Editor
 
             list.onAddCallback = _ =>
             {
-                Undo.RecordObject(_settings, "Add Filter");
-                config.filters.Add(new FilterCondition());
-                ApplyConfigChange(config);
+                var menu = new GenericMenu();
+                menu.AddItem(new GUIContent("Type"), false, () => AddFilter(config, FilterConditionTargetKind.Type));
+                menu.AddItem(new GUIContent("Asset"), false, () => AddFilter(config, FilterConditionTargetKind.Asset));
+                menu.ShowAsContext();
             };
 
             list.onRemoveCallback = _ =>
@@ -412,7 +413,7 @@ namespace Nyorowrl.AssetSync.Editor
                 return lineHeight + (outerPadding * 2f) + (itemMargin * 2f);
 
             FilterCondition filter = config.filters[index] ??= new FilterCondition();
-            filter.multipleTypeNames ??= new List<string>();
+            EnsureFilterCollections(filter);
 
             float contentHeight = lineHeight + rowSpacing; // action
             if (filter.useMultipleTypes)
@@ -420,7 +421,7 @@ namespace Nyorowrl.AssetSync.Editor
                 contentHeight += lineHeight;
                 if (GetFilterTypeFoldout(filter))
                 {
-                    int count = filter.multipleTypeNames.Count;
+                    int count = GetFilterListElementCount(filter);
                     if (count > 0)
                     {
                         contentHeight += rowSpacing;
@@ -439,7 +440,7 @@ namespace Nyorowrl.AssetSync.Editor
 
         private void DrawFilterElement(Rect rect, FilterCondition filter, SyncConfig config)
         {
-            filter.multipleTypeNames ??= new List<string>();
+            EnsureFilterCollections(filter);
             float lineHeight = EditorGUIUtility.singleLineHeight;
             float rowSpacing = EditorGUIUtility.standardVerticalSpacing;
             const float itemMargin = 8f;
@@ -487,7 +488,25 @@ namespace Nyorowrl.AssetSync.Editor
             }
 
             y += lineHeight + rowSpacing;
-            DrawTypeField(contentRect.x, ref y, labelWidth, fieldWidth, lineHeight, rowSpacing, filter, config);
+            if (filter.targetKind == FilterConditionTargetKind.Asset)
+                DrawAssetField(contentRect.x, ref y, labelWidth, fieldWidth, lineHeight, rowSpacing, filter, config);
+            else
+                DrawTypeField(contentRect.x, ref y, labelWidth, fieldWidth, lineHeight, rowSpacing, filter, config);
+        }
+
+        private void AddFilter(SyncConfig config, FilterConditionTargetKind targetKind)
+        {
+            if (config == null)
+                return;
+
+            Undo.RecordObject(_settings, "Add Filter");
+            var filter = new FilterCondition
+            {
+                targetKind = targetKind
+            };
+            config.filters.Add(filter);
+            SetFilterTypeFoldout(filter, true);
+            ApplyConfigChange(config);
         }
 
         private void DrawTypeField(float x, ref float y, float labelWidth, float fieldWidth, float lineHeight,
@@ -524,11 +543,11 @@ namespace Nyorowrl.AssetSync.Editor
                     bool nextIsListMode = DrawFilterTypeModeToggle(
                         toggleRect,
                         filter.useMultipleTypes,
-                        GetFilterTypeModeToggleContent());
+                        GetFilterValueModeToggleContent());
                     if (ccs.changed && nextIsListMode != filter.useMultipleTypes)
                     {
                         Undo.RecordObject(_settings, "Change Type Mode");
-                        SwitchFilterTypeMode(filter, nextIsListMode);
+                        SwitchFilterValueMode(filter, nextIsListMode);
                         SetFilterTypeFoldout(filter, true);
                         ApplyConfigChange(config);
                     }
@@ -576,11 +595,11 @@ namespace Nyorowrl.AssetSync.Editor
                 bool nextIsListMode = DrawFilterTypeModeToggle(
                     toggleRect,
                     filter.useMultipleTypes,
-                    GetFilterTypeModeToggleContent());
+                    GetFilterValueModeToggleContent());
                 if (ccs.changed && nextIsListMode != filter.useMultipleTypes)
                 {
                     Undo.RecordObject(_settings, "Change Type Mode");
-                    SwitchFilterTypeMode(filter, nextIsListMode);
+                    SwitchFilterValueMode(filter, nextIsListMode);
                     ApplyConfigChange(config);
                     return;
                 }
@@ -616,23 +635,181 @@ namespace Nyorowrl.AssetSync.Editor
             }
         }
 
-        private static void SwitchFilterTypeMode(FilterCondition filter, bool listMode)
+        private void DrawAssetField(float x, ref float y, float labelWidth, float fieldWidth, float lineHeight,
+            float rowSpacing, FilterCondition filter, SyncConfig config)
+        {
+            const float spacing = 2f;
+            var labelRect = new Rect(x, y, labelWidth, lineHeight);
+
+            float fieldX = x + labelWidth;
+            float valueWidth = Mathf.Max(0f, fieldWidth - FilterTypeModeToggleWidth - spacing);
+            var valueRect = new Rect(fieldX, y, valueWidth, lineHeight);
+            var toggleRect = new Rect(valueRect.xMax + spacing, y, FilterTypeModeToggleWidth, lineHeight);
+
+            if (!filter.useMultipleTypes)
+            {
+                EditorGUI.LabelField(labelRect, "Asset");
+                DrawAssetFieldControl(valueRect, filter.singleAssetGuid, config, isFilterAsset: true, "Change Asset", guid =>
+                {
+                    filter.singleAssetGuid = guid;
+                    ApplyConfigChange(config);
+                });
+
+                using (var ccs = new EditorGUI.ChangeCheckScope())
+                {
+                    bool nextIsListMode = DrawFilterTypeModeToggle(
+                        toggleRect,
+                        filter.useMultipleTypes,
+                        GetFilterValueModeToggleContent());
+                    if (ccs.changed && nextIsListMode != filter.useMultipleTypes)
+                    {
+                        Undo.RecordObject(_settings, "Change Asset Mode");
+                        SwitchFilterValueMode(filter, nextIsListMode);
+                        SetFilterTypeFoldout(filter, true);
+                        ApplyConfigChange(config);
+                    }
+                }
+                return;
+            }
+
+            bool foldout = GetFilterTypeFoldout(filter);
+            bool nextFoldout = EditorGUI.Foldout(labelRect, foldout, "Asset", true);
+            if (nextFoldout != foldout)
+                SetFilterTypeFoldout(filter, nextFoldout);
+
+            const float listSizeButtonWidth = 25f;
+            float buttonWidth = Mathf.Round(listSizeButtonWidth);
+            float listButtonsWidth = buttonWidth * 2f;
+            float buttonsStartX = Mathf.Floor(Mathf.Max(valueRect.x, valueRect.xMax - listButtonsWidth));
+            var plusRect = new Rect(
+                buttonsStartX,
+                y,
+                buttonWidth,
+                lineHeight);
+            var minusRect = new Rect(plusRect.xMax, y, buttonWidth, lineHeight);
+
+            if (GUI.Button(plusRect, "+", EditorStyles.miniButtonLeft))
+            {
+                Undo.RecordObject(_settings, "Add Asset");
+                filter.multipleAssetGuids.Add(string.Empty);
+                ApplyConfigChange(config);
+            }
+
+            using (new EditorGUI.DisabledScope(filter.multipleAssetGuids.Count <= 1))
+            {
+                if (GUI.Button(minusRect, "-", EditorStyles.miniButtonRight))
+                {
+                    Undo.RecordObject(_settings, "Remove Asset");
+                    filter.multipleAssetGuids.RemoveAt(filter.multipleAssetGuids.Count - 1);
+                    ApplyConfigChange(config);
+                }
+            }
+
+            using (var ccs = new EditorGUI.ChangeCheckScope())
+            {
+                bool nextIsListMode = DrawFilterTypeModeToggle(
+                    toggleRect,
+                    filter.useMultipleTypes,
+                    GetFilterValueModeToggleContent());
+                if (ccs.changed && nextIsListMode != filter.useMultipleTypes)
+                {
+                    Undo.RecordObject(_settings, "Change Asset Mode");
+                    SwitchFilterValueMode(filter, nextIsListMode);
+                    ApplyConfigChange(config);
+                    return;
+                }
+            }
+
+            if (!nextFoldout)
+                return;
+
+            y += lineHeight + rowSpacing;
+            for (int i = 0; i < filter.multipleAssetGuids.Count; i++)
+            {
+                var elementLabelRect = new Rect(x, y, labelWidth, lineHeight);
+                var elementFieldRect = new Rect(fieldX, y, fieldWidth, lineHeight);
+                EditorGUI.LabelField(elementLabelRect, $"Element {i}");
+                int captured = i;
+                DrawAssetFieldControl(elementFieldRect, filter.multipleAssetGuids[captured], config, isFilterAsset: true, "Change Asset", guid =>
+                {
+                    filter.multipleAssetGuids[captured] = guid;
+                    ApplyConfigChange(config);
+                });
+
+                if (i < filter.multipleAssetGuids.Count - 1)
+                    y += lineHeight + rowSpacing;
+            }
+        }
+
+        private void DrawAssetFieldControl(
+            Rect rect,
+            string guid,
+            SyncConfig config,
+            bool isFilterAsset,
+            string undoLabel,
+            Action<string> onChanged)
+        {
+            string assetPath = AssetDatabase.GUIDToAssetPath(guid);
+            UnityEngine.Object current = string.IsNullOrEmpty(assetPath)
+                ? null
+                : AssetDatabase.LoadMainAssetAtPath(assetPath);
+            bool isValid = isFilterAsset
+                ? IsFilterAssetGuidValid(config, guid)
+                : IsProtectedGuidValid(config, guid);
+
+            Color previousBackgroundColor = GUI.backgroundColor;
+            if (!isValid)
+                GUI.backgroundColor = Color.red;
+            EditorGUI.BeginChangeCheck();
+            var next = EditorGUI.ObjectField(rect, current, typeof(UnityEngine.Object), false);
+            if (EditorGUI.EndChangeCheck())
+            {
+                Undo.RecordObject(_settings, undoLabel);
+                string nextPath = AssetDatabase.GetAssetPath(next);
+                string nextGuid = string.IsNullOrEmpty(nextPath)
+                    ? string.Empty
+                    : AssetDatabase.AssetPathToGUID(nextPath);
+                onChanged?.Invoke(nextGuid);
+            }
+            GUI.backgroundColor = previousBackgroundColor;
+        }
+
+        private static void SwitchFilterValueMode(FilterCondition filter, bool listMode)
         {
             filter.multipleTypeNames ??= new List<string>();
+            filter.multipleAssetGuids ??= new List<string>();
             if (filter.useMultipleTypes == listMode)
                 return;
 
             if (listMode)
             {
-                if (filter.multipleTypeNames.Count == 0)
-                    filter.multipleTypeNames.Add(filter.singleTypeName ?? string.Empty);
+                if (filter.targetKind == FilterConditionTargetKind.Asset)
+                {
+                    if (filter.multipleAssetGuids.Count == 0)
+                        filter.multipleAssetGuids.Add(filter.singleAssetGuid ?? string.Empty);
+                    else
+                        filter.multipleAssetGuids[0] = filter.singleAssetGuid ?? string.Empty;
+                }
                 else
-                    filter.multipleTypeNames[0] = filter.singleTypeName ?? string.Empty;
+                {
+                    if (filter.multipleTypeNames.Count == 0)
+                        filter.multipleTypeNames.Add(filter.singleTypeName ?? string.Empty);
+                    else
+                        filter.multipleTypeNames[0] = filter.singleTypeName ?? string.Empty;
+                }
             }
             else
             {
-                if (filter.multipleTypeNames.Count > 0)
-                    filter.singleTypeName = filter.multipleTypeNames[0];
+                if (filter.targetKind == FilterConditionTargetKind.Asset)
+                {
+                    if (filter.multipleAssetGuids.Count > 0)
+                        filter.singleAssetGuid = filter.multipleAssetGuids[0];
+                }
+                else
+                {
+                    if (filter.multipleTypeNames.Count > 0)
+                        filter.singleTypeName = filter.multipleTypeNames[0];
+                }
             }
 
             filter.useMultipleTypes = listMode;
@@ -652,10 +829,10 @@ namespace Nyorowrl.AssetSync.Editor
             _filterTypeFoldouts[filter] = foldout;
         }
 
-        private GUIContent GetFilterTypeModeToggleContent()
+        private GUIContent GetFilterValueModeToggleContent()
         {
-            if (_filterTypeModeToggleContent != null)
-                return _filterTypeModeToggleContent;
+            if (_filterValueModeToggleContent != null)
+                return _filterValueModeToggleContent;
 
             const string iconKey = "d_UnityEditor.SceneHierarchyWindow";
             Texture iconTexture =
@@ -666,12 +843,12 @@ namespace Nyorowrl.AssetSync.Editor
 
             if (iconTexture != null)
             {
-                _filterTypeModeToggleContent = new GUIContent(iconTexture, "Toggle single/list mode");
-                return _filterTypeModeToggleContent;
+                _filterValueModeToggleContent = new GUIContent(iconTexture, "Toggle single/list mode");
+                return _filterValueModeToggleContent;
             }
 
-            _filterTypeModeToggleContent = new GUIContent("L", "Toggle single/list mode");
-            return _filterTypeModeToggleContent;
+            _filterValueModeToggleContent = new GUIContent("L", "Toggle single/list mode");
+            return _filterValueModeToggleContent;
         }
 
         private static bool DrawFilterTypeModeToggle(Rect rect, bool value, GUIContent content)
@@ -697,72 +874,97 @@ namespace Nyorowrl.AssetSync.Editor
             return nextValue;
         }
 
-        private void DrawIgnoreList(SyncConfig config)
+        private int GetFilterListElementCount(FilterCondition filter)
         {
-            config.ignoreGuids ??= new List<string>();
-            GetOrCreateIgnoreList(config).DoLayoutList();
+            return filter.targetKind == FilterConditionTargetKind.Asset
+                ? filter.multipleAssetGuids.Count
+                : filter.multipleTypeNames.Count;
         }
 
-        private ReorderableList GetOrCreateIgnoreList(SyncConfig config)
+        private static void EnsureFilterCollections(FilterCondition filter)
         {
-            if (_ignoreLists.TryGetValue(config, out var existing))
+            filter.multipleTypeNames ??= new List<string>();
+            filter.multipleAssetGuids ??= new List<string>();
+        }
+
+        private void DrawProtectedList(SyncConfig config)
+        {
+            config.protectedGuids ??= new List<string>();
+            GetOrCreateProtectedList(config).DoLayoutList();
+        }
+
+        private ReorderableList GetOrCreateProtectedList(SyncConfig config)
+        {
+            if (_protectedLists.TryGetValue(config, out var existing))
             {
-                existing.list = config.ignoreGuids;
+                existing.list = config.protectedGuids;
                 return existing;
             }
 
-            config.ignoreGuids ??= new List<string>();
+            config.protectedGuids ??= new List<string>();
 
-            var list = new ReorderableList(config.ignoreGuids, typeof(string),
+            var list = new ReorderableList(config.protectedGuids, typeof(string),
                 draggable: true, displayHeader: true, displayAddButton: true, displayRemoveButton: true);
 
-            list.drawHeaderCallback = rect => EditorGUI.LabelField(rect, "Ignore Assets");
+            list.drawHeaderCallback = rect => EditorGUI.LabelField(rect, "Destination Protected Assets");
             list.elementHeight = EditorGUIUtility.singleLineHeight + 2;
 
             list.drawElementCallback = (rect, index, isActive, isFocused) =>
             {
-                if (index < 0 || index >= config.ignoreGuids.Count)
+                if (index < 0 || index >= config.protectedGuids.Count)
                     return;
 
-                string guid = config.ignoreGuids[index];
-                string path = AssetDatabase.GUIDToAssetPath(guid);
-                UnityEngine.Object current = string.IsNullOrEmpty(path)
-                    ? null
-                    : AssetDatabase.LoadMainAssetAtPath(path);
-
                 var fieldRect = new Rect(rect.x, rect.y + 1, rect.width, EditorGUIUtility.singleLineHeight);
-                EditorGUI.BeginChangeCheck();
-                var next = EditorGUI.ObjectField(fieldRect, current, typeof(UnityEngine.Object), false);
-                if (EditorGUI.EndChangeCheck())
+                DrawAssetFieldControl(fieldRect, config.protectedGuids[index], config, isFilterAsset: false, "Change Protected Asset", guid =>
                 {
-                    Undo.RecordObject(_settings, "Change Ignore Asset");
-                    string nextPath = AssetDatabase.GetAssetPath(next);
-                    config.ignoreGuids[index] = string.IsNullOrEmpty(nextPath)
-                        ? string.Empty
-                        : AssetDatabase.AssetPathToGUID(nextPath);
+                    config.protectedGuids[index] = guid;
                     ApplyConfigChange(config);
-                }
+                });
             };
 
             list.onAddCallback = _ =>
             {
-                Undo.RecordObject(_settings, "Add Ignore Asset");
-                config.ignoreGuids.Add(string.Empty);
+                Undo.RecordObject(_settings, "Add Protected Asset");
+                config.protectedGuids.Add(string.Empty);
                 ApplyConfigChange(config);
             };
 
             list.onRemoveCallback = _ =>
             {
-                if (list.index < 0 || list.index >= config.ignoreGuids.Count)
+                if (list.index < 0 || list.index >= config.protectedGuids.Count)
                     return;
 
-                Undo.RecordObject(_settings, "Delete Ignore Asset");
-                config.ignoreGuids.RemoveAt(list.index);
+                Undo.RecordObject(_settings, "Delete Protected Asset");
+                config.protectedGuids.RemoveAt(list.index);
                 ApplyConfigChange(config);
             };
 
-            _ignoreLists[config] = list;
+            _protectedLists[config] = list;
             return list;
+        }
+
+        private static bool IsFilterAssetGuidValid(SyncConfig config, string guid)
+        {
+            return IsGuidWithinRoot(guid, config?.sourcePath);
+        }
+
+        private static bool IsProtectedGuidValid(SyncConfig config, string guid)
+        {
+            return IsGuidWithinRoot(guid, config?.destinationPath);
+        }
+
+        private static bool IsGuidWithinRoot(string guid, string rootPath)
+        {
+            if (string.IsNullOrWhiteSpace(guid))
+                return true;
+            if (string.IsNullOrEmpty(rootPath))
+                return false;
+
+            string assetPath = AssetDatabase.GUIDToAssetPath(guid);
+            if (string.IsNullOrEmpty(assetPath))
+                return false;
+
+            return AssetSyncPostprocessor.IsAssetPathWithinRoot(assetPath, rootPath);
         }
 
         private void DrawCopyPreview(SyncConfig config)
@@ -957,7 +1159,7 @@ namespace Nyorowrl.AssetSync.Editor
             EditorUtility.SetDirty(_settings);
             _filterTypeFoldouts.Clear();
             _filterLists.Clear();
-            _ignoreLists.Clear();
+            _protectedLists.Clear();
 
             _configTreeView.Reload();
             int next = Mathf.Clamp(idx - 1, 0, _settings.syncConfigs.Count - 1);
@@ -1183,7 +1385,7 @@ namespace Nyorowrl.AssetSync.Editor
         private static void EnsureConfigCollections(SyncConfig config)
         {
             config.filters ??= new List<FilterCondition>();
-            config.ignoreGuids ??= new List<string>();
+            config.protectedGuids ??= new List<string>();
             config.syncRelativePaths ??= new List<string>();
             config.syncRelativeDirectoryPaths ??= new List<string>();
         }

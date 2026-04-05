@@ -19,12 +19,13 @@ Install this package with the Unity Package Manager.
    - `on`: synchronize files under nested folders.
    - `off`: synchronize only files directly under `Source`.
 6. Enable filters if needed:
-   - `Exclude = off`: include matching asset types.
-   - `Exclude = on`: exclude matching asset types.
-   - `Multiple Types = on`: one filter condition can match any of several types.
-7. Optionally add assets to `Ignore Assets`:
-   - source-ignore: treated as sync-excluded.
-   - destination-ignore: never copied/updated/deleted by sync.
+   - `Action = Include`: include matching targets.
+   - `Action = Exclude`: exclude matching targets.
+   - `Target = Type`: select Unity object types.
+   - `Target = Asset`: select source assets/folders.
+   - `List Mode = on`: one filter condition can match any of several targets.
+7. Optionally add assets to `Protected`:
+   - destination protected entries are never copied/updated/deleted by sync.
 8. If a destination file already exists as unsynced, resolve it in the conflict dialog with `Overwrite` or `Keep`.
 9. Edit assets in the source folder. AssetSync re-syncs automatically.
 
@@ -33,11 +34,11 @@ Install this package with the Unity Package Manager.
 - Copies only files that are new or content-changed.
 - Never copies `.meta` files from source.
 - Tracks synchronized files per config in `SyncConfig.syncRelativePaths` (saved in settings assets).
-- Supports manual `Ignore` entries (GUID-based): destination-ignore files are never copied/updated/deleted.
-- Treats source-ignore files as sync-excluded (same behavior as filter exclusion).
-- If a destination file already exists and is neither sync nor ignore, AssetSync opens a conflict dialog to choose `Overwrite` or `Keep`.
-- Disabling a config removes destination files tracked as sync, while preserving manual files and destination-ignore files.
-- Synced destination assets are shown with an icon badge in the Project window (excluded for destination-ignore or disabled configs).
+- Supports manual `Protected` entries (GUID-based): destination protected files/folders are never copied/updated/deleted.
+- Supports filter target kinds `Type` and `Asset`; asset target folders apply recursively to all descendants.
+- If a destination file already exists and is neither sync nor protected, AssetSync opens a conflict dialog to choose `Overwrite` or `Keep`.
+- Disabling a config removes destination files tracked as sync, while preserving manual files and protected destination entries.
+- Synced destination assets are shown with an icon badge in the Project window (excluded for protected entries or disabled configs).
 - If selected source or destination folders are moved, stored config paths are remapped automatically.
 
 ## Safety rules

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -48,8 +48,8 @@ namespace Nyorowrl.AssetSync.Editor.Tests
         public void TearDown()
         {
 
-            // AssetDatabase.DeleteAsset 縺�E�繝輔か繝ｫ繝縺梧悴逋ｻ骭�E�縺�E�縺�E�螟ｱ謨励☁E��九◆繧√・
-            // FileUtil 縺�E�逶�E�謗･蜑企勁縺励※縺九ａERefresh 縺吶�E�E
+            // AssetDatabase.DeleteAsset 邵ｺ・ｽE・ｽ郢晁ｼ斐°郢晢ｽｫ郢敖邵ｺ譴ｧ謔ｴ騾具ｽｻ鬪ｭ・ｽE・ｽ邵ｺ・ｽE・ｽ邵ｺ・ｽE・ｽ陞滂ｽｱ隰ｨ蜉ｱ笘・・ｽ・ｽ荵昶螺郢ｧ竏堋繝ｻ
+            // FileUtil 邵ｺ・ｽE・ｽ騾ｶ・ｽE・ｽ隰暦ｽ･陷台ｼ∝求邵ｺ蜉ｱ窶ｻ邵ｺ荵晢ｽ・Refresh 邵ｺ蜷ｶ・ｽE・ｽE
             string projectRoot = Path.GetDirectoryName(Application.dataPath);
             string fullTestRoot = Path.GetFullPath(Path.Combine(projectRoot, _testRoot));
             FileUtil.DeleteFileOrDirectory(fullTestRoot);
@@ -58,7 +58,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             AssetSyncer.ConflictResolverOverride = null;
         }
 
-        // 笏笏笏 Helpers 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
+        // 隨渉隨渉隨渉 Helpers 隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉
 
         private void WriteSrc(string relPath, string content = "test")
         {
@@ -78,7 +78,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
         {
             string full = Path.Combine(_srcFullPath, relPath.Replace('/', Path.DirectorySeparatorChar));
             if (File.Exists(full)) File.Delete(full);
-            // SyncConfig 縺�E� Refresh 縺�E�繧�E�繝ｳ繝昴・繝域�E�医∩縺�E� .meta 繧めE��髯�E�縺励↑縺・→蟄�E�遶・.meta 隴�E�蜻翫′蜁E��繧・
+            // SyncConfig 邵ｺ・ｽE・ｽ Refresh 邵ｺ・ｽE・ｽ郢ｧ・ｽE・ｽ郢晢ｽｳ郢晄亢繝ｻ郢晏沺・ｽE・ｽ蛹ｻ竏ｩ邵ｺ・ｽE・ｽ .meta 郢ｧ繧・・ｽ・ｽ鬮ｯ・ｽE・ｽ邵ｺ蜉ｱ竊醍ｸｺ繝ｻ竊定氛・ｽE・ｽ驕ｶ繝ｻ.meta 髫ｴ・ｽE・ｽ陷ｻ鄙ｫ窶ｲ陷・・ｽ・ｽ郢ｧ繝ｻ
             string meta = full + ".meta";
             if (File.Exists(meta)) File.Delete(meta);
         }
@@ -132,7 +132,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             return config.syncRelativeDirectoryPaths.Contains(AssetSyncer.NormalizeRelativePath(relPath));
         }
 
-        // 笏笏笏 ShouldCopy (#15窶・8) 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
+        // 隨渉隨渉隨渉 ShouldCopy (#15遯ｶ繝ｻ8) 隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉
 
         // #15
         [Test]
@@ -200,7 +200,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             finally { Directory.Delete(tmp, true); }
         }
 
-        // 笏笏笏 SyncConfig 繝�EΜ繝�E・繧�E�繝ｧ繝ｳ (#19窶・3) 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
+        // 隨渉隨渉隨渉 SyncConfig 郢晢ｿｽEﾎ懃ｹ晢ｿｽE繝ｻ郢ｧ・ｽE・ｽ郢晢ｽｧ郢晢ｽｳ (#19遯ｶ繝ｻ3) 隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉
 
         [Test]
         public void CollectCopyPreviewDestinationAssetPaths_NewFile_ReturnsDestinationAssetPath()
@@ -529,7 +529,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             Assert.AreEqual("v1", File.ReadAllText(nestedDstFile));
         }
 
-        // 笏笏笏 Phase 1: 繧�E�繝斐・ (#24窶・2) 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
+        // 隨渉隨渉隨渉 Phase 1: 郢ｧ・ｽE・ｽ郢晄鱒繝ｻ (#24遯ｶ繝ｻ2) 隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉
 
         // #24
         [Test]
@@ -569,7 +569,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             AssetSyncer.SyncConfig(config);
             DateTime after = DstWriteTime("file.txt");
 
-            Assert.AreEqual(before, after, "Content unchanged 竊�Edst must not be overwritten");
+            Assert.AreEqual(before, after, "Content unchanged 遶奇ｿｽEdst must not be overwritten");
         }
 
         // #27
@@ -579,7 +579,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             WriteSrc("file.txt", "data");
             AssetDatabase.Refresh();
 
-            // Texture2D 蝙九�E縺�E�險�E�蜿�E� 竊�ETextAsset 縺�E�髯�E�螟�E
+            // Texture2D 陜吩ｹ晢ｿｽE邵ｺ・ｽE・ｽ髫ｪ・ｽE・ｽ陷ｿ・ｽE・ｽ 遶奇ｿｽETextAsset 邵ｺ・ｽE・ｽ鬮ｯ・ｽE・ｽ陞滂ｿｽE
             var filter = new FilterCondition { singleTypeName = typeof(Texture2D).AssemblyQualifiedName };
             AssetSyncer.SyncConfig(MakeConfig(new List<FilterCondition> { filter }));
             Assert.IsFalse(DstExists("file.txt"));
@@ -592,7 +592,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             WriteSrc("file.txt", "data");
             AssetDatabase.Refresh();
 
-            // TextAsset 蝙九�E縺�E�險�E�蜿�E� 竊�E.txt 縺�E�繧�E�繝斐・縺輔ｌ繧・
+            // TextAsset 陜吩ｹ晢ｿｽE邵ｺ・ｽE・ｽ髫ｪ・ｽE・ｽ陷ｿ・ｽE・ｽ 遶奇ｿｽE.txt 邵ｺ・ｽE・ｽ郢ｧ・ｽE・ｽ郢晄鱒繝ｻ邵ｺ霈費ｽ檎ｹｧ繝ｻ
             var filter = new FilterCondition { singleTypeName = typeof(TextAsset).AssemblyQualifiedName };
             AssetSyncer.SyncConfig(MakeConfig(new List<FilterCondition> { filter }));
             Assert.IsTrue(DstExists("file.txt"));
@@ -649,15 +649,15 @@ namespace Nyorowrl.AssetSync.Editor.Tests
         }
 
         // #30
-        // meta 繝輔ぃ繧�E�繝ｫ縺後さ繝斐・縺輔ｌ縺�E�縺・↑縺・�E�E���E�縺�E�遒ｺ隱・
-        // 繧�E�繝斐・縺輔ｌ縺�E�縺・�E�縺�E� src 縺�E� dst 縺�E� GUID 縺御�E�閾�E�縺吶�E�縺後ゞnity 縺檎峡遶九＠縺�E�逕滓�E縺励◁E���E�蜷医・逡�E�縺�E�繧九・
+        // meta 郢晁ｼ斐＜郢ｧ・ｽE・ｽ郢晢ｽｫ邵ｺ蠕後＆郢晄鱒繝ｻ邵ｺ霈費ｽ檎ｸｺ・ｽE・ｽ邵ｺ繝ｻ竊醍ｸｺ繝ｻ・ｽE・ｽE・ｽ・ｽ・ｽE・ｽ邵ｺ・ｽE・ｽ驕抵ｽｺ髫ｱ繝ｻ
+        // 郢ｧ・ｽE・ｽ郢晄鱒繝ｻ邵ｺ霈費ｽ檎ｸｺ・ｽE・ｽ邵ｺ繝ｻ・ｽE・ｽ邵ｺ・ｽE・ｽ src 邵ｺ・ｽE・ｽ dst 邵ｺ・ｽE・ｽ GUID 邵ｺ蠕｡・ｽE・ｽﾂ髢ｾ・ｽE・ｽ邵ｺ蜷ｶ・ｽE・ｽ邵ｺ蠕個繧柤ity 邵ｺ讙主ｳ｡驕ｶ荵晢ｼ邵ｺ・ｽE・ｽ騾墓ｻ難ｿｽE邵ｺ蜉ｱ笳・・ｽ・ｽ・ｽE・ｽ陷ｷ蛹ｻ繝ｻ騾｡・ｽE・ｽ邵ｺ・ｽE・ｽ郢ｧ荵敖繝ｻ
         [Test]
         public void Phase1_MetaFile_NotCopied()
         {
             WriteSrc("file.txt", "data");
-            AssetDatabase.Refresh(); // src/.meta 縺檎�E謌�E�E�E��後ａE
+            AssetDatabase.Refresh(); // src/.meta 邵ｺ讙趣ｿｽE隰鯉ｿｽE・ｽE・ｽE・ｽ・ｽ蠕鯉ｽ・
 
-            AssetSyncer.SyncConfig(MakeConfig()); // 蜀・Κ縺�E� Refresh 竊�Edst/.meta 縺・Unity 縺�E�繧医�E�逕滓�E縺輔ｌ繧・
+            AssetSyncer.SyncConfig(MakeConfig()); // 陷繝ｻﾎ夂ｸｺ・ｽE・ｽ Refresh 遶奇ｿｽEdst/.meta 邵ｺ繝ｻUnity 邵ｺ・ｽE・ｽ郢ｧ蛹ｻ・ｽE・ｽ騾墓ｻ難ｿｽE邵ｺ霈費ｽ檎ｹｧ繝ｻ
 
             string srcMeta = Path.Combine(_srcFullPath, "file.txt.meta");
             string dstMeta = Path.Combine(_dstFullPath, "file.txt.meta");
@@ -691,7 +691,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             Assert.IsTrue(SyncContains(config, "file.txt"));
         }
 
-        // 笏笏笏 Phase 2: 蜑企勁 (#33窶・1) 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
+        // 隨渉隨渉隨渉 Phase 2: 陷台ｼ∝求 (#33遯ｶ繝ｻ1) 隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉
 
         // #33
         [Test]
@@ -714,7 +714,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             var config = MakeConfig();
             WriteSrc("file.txt");
             AssetSyncer.SyncConfig(config);
-            AssetDatabase.Refresh(); // dst/.meta 縺檎�E謌�E�E�E��後ａE
+            AssetDatabase.Refresh(); // dst/.meta 邵ｺ讙趣ｿｽE隰鯉ｿｽE・ｽE・ｽE・ｽ・ｽ蠕鯉ｽ・
             string dstMeta = Path.Combine(_dstFullPath, "file.txt.meta");
             Assume.That(File.Exists(dstMeta), "meta must exist after Refresh for this test to be meaningful");
 
@@ -732,7 +732,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             AssetSyncer.SyncConfig(config);
             Assert.IsTrue(DstExists("file.txt"));
 
-            // 蜀榊�E譛溘＠縺�E�繧・src 縺悟ｭ伜惠縺励※繝輔ぅ繝ｫ繧�E�騾夐℃ 竊�E菫晁E��
+            // 陷讎奇ｿｽE隴帶ｺ假ｼ邵ｺ・ｽE・ｽ郢ｧ繝ｻsrc 邵ｺ謔滂ｽｭ莨懈Β邵ｺ蜉ｱ窶ｻ郢晁ｼ斐≦郢晢ｽｫ郢ｧ・ｽE・ｽ鬨ｾ螟絶с 遶奇ｿｽE闖ｫ譎・・ｽ・ｽ
             AssetSyncer.SyncConfig(config);
             Assert.IsTrue(DstExists("file.txt"));
         }
@@ -741,7 +741,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
         [Test]
         public void Phase2_NonManifestFile_SrcNotExist_Kept()
         {
-            // dst 縺�E�謁E��虚驟咲�E��E�・医・繝九ヵ繧�E�繧�E�繝医↑縺暦�E�・
+            // dst 邵ｺ・ｽE・ｽ隰・・ｽ・ｽ陌夐ｩ溷調・ｽE・ｽ・ｽE・ｽ繝ｻ蛹ｻ繝ｻ郢昜ｹ昴Ψ郢ｧ・ｽE・ｽ郢ｧ・ｽE・ｽ郢晏現竊醍ｸｺ證ｦ・ｽE・ｽ繝ｻ
             WriteDst("manual.txt", "manual");
             AssetSyncer.SyncConfig(MakeConfig());
             Assert.IsTrue(DstExists("manual.txt"), "manually placed file must not be deleted");
@@ -751,11 +751,11 @@ namespace Nyorowrl.AssetSync.Editor.Tests
         [Test]
         public void Phase2_NonManifestFile_SrcExists_Kept()
         {
-            // src 縺�E� dst 縺�E�蜷悟錐繝輔ぃ繧�E�繝ｫ縺後≠縺�E�縺�E�繧めE�‥st 縺後�E繝九ヵ繧�E�繧�E�繝亥�E�悶↑繧芽�E��E�繧峨↑縺・
+            // src 邵ｺ・ｽE・ｽ dst 邵ｺ・ｽE・ｽ陷ｷ謔滄倹郢晁ｼ斐＜郢ｧ・ｽE・ｽ郢晢ｽｫ邵ｺ蠕娯旺邵ｺ・ｽE・ｽ邵ｺ・ｽE・ｽ郢ｧ繧・・ｽ窶･st 邵ｺ蠕鯉ｿｽE郢昜ｹ昴Ψ郢ｧ・ｽE・ｽ郢ｧ・ｽE・ｽ郢昜ｺ･・ｽE・ｽ謔ｶ竊醍ｹｧ闃ｽ・ｽE・ｽ・ｽE・ｽ郢ｧ蟲ｨ竊醍ｸｺ繝ｻ
             WriteSrc("file.txt", "src-content");
             WriteDst("file.txt", "different-manual-content");
 
-            // src 縺�E�繝輔ぃ繧�E�繝ｫ繧偵ヵ繧�E�繝ｫ繧�E�縺�E�髯�E�螟悶�E�縺�E�蜷梧悁E�E・st 縺�E� file.txt 縺�E�繝槭ル繝輔ぉ繧�E�繝医↓蜈�E�繧峨↑縺・�E�・
+            // src 邵ｺ・ｽE・ｽ郢晁ｼ斐＜郢ｧ・ｽE・ｽ郢晢ｽｫ郢ｧ蛛ｵ繝ｵ郢ｧ・ｽE・ｽ郢晢ｽｫ郢ｧ・ｽE・ｽ邵ｺ・ｽE・ｽ鬮ｯ・ｽE・ｽ陞滓じ・ｽE・ｽ邵ｺ・ｽE・ｽ陷ｷ譴ｧ謔・・ｽE繝ｻst 邵ｺ・ｽE・ｽ file.txt 邵ｺ・ｽE・ｽ郢晄ｧｭ繝ｫ郢晁ｼ斐♂郢ｧ・ｽE・ｽ郢晏現竊楢怦・ｽE・ｽ郢ｧ蟲ｨ竊醍ｸｺ繝ｻ・ｽE・ｽ繝ｻ
             var exclude = new FilterCondition
             {
                 singleTypeName = typeof(TextAsset).AssemblyQualifiedName,
@@ -764,7 +764,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             AssetDatabase.Refresh();
             AssetSyncer.SyncConfig(MakeConfig(new List<FilterCondition> { exclude }));
 
-            // 繝槭ル繝輔ぉ繧�E�繝亥�E�悶↑縺�E�縺�E�蜀・�E��E�縺碁E��E���E�縺�E�繧めE��晁E��
+            // 郢晄ｧｭ繝ｫ郢晁ｼ斐♂郢ｧ・ｽE・ｽ郢昜ｺ･・ｽE・ｽ謔ｶ竊醍ｸｺ・ｽE・ｽ邵ｺ・ｽE・ｽ陷繝ｻ・ｽE・ｽ・ｽE・ｽ邵ｺ遒・・ｽ・ｽE・ｽ・ｽ・ｽE・ｽ邵ｺ・ｽE・ｽ郢ｧ繧・・ｽ・ｽ譎・・ｽ・ｽ
             Assert.IsTrue(DstExists("file.txt"));
             Assert.AreEqual("different-manual-content", ReadDst("file.txt"));
         }
@@ -799,16 +799,16 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             WriteSrc("file.txt", "original");
             AssetDatabase.Refresh();
 
-            // 繝輔ぅ繝ｫ繧�E�縺�E�縺励〒蜷梧悁E竊�E繝槭ル繝輔ぉ繧�E�繝医↓逋ｻ骭�E�
+            // 郢晁ｼ斐≦郢晢ｽｫ郢ｧ・ｽE・ｽ邵ｺ・ｽE・ｽ邵ｺ蜉ｱ縲定惺譴ｧ謔・遶奇ｿｽE郢晄ｧｭ繝ｫ郢晁ｼ斐♂郢ｧ・ｽE・ｽ郢晏現竊馴具ｽｻ鬪ｭ・ｽE・ｽ
             var config = MakeConfig();
             AssetSyncer.SyncConfig(config);
             Assert.IsTrue(DstExists("file.txt"));
 
-            // dst 繧呈�E蜍輔〒螟画峩
+            // dst 郢ｧ蜻茨ｿｽE陷崎ｼ斐定棔逕ｻ蟲ｩ
             WriteDst("file.txt", "manually-modified");
 
-            // TextAsset 繧帝勁螟悶☁E��九ヵ繧�E�繝ｫ繧�E�縺�E�蜀榊�E譛�E
-            // dst 蜀・�E��E�縺・src 縺�E�逡�E�縺�E�繧・竊�E謁E��虚螟画峩縺�E�隕九�E縺嶺�E�晁E��
+            // TextAsset 郢ｧ蟶晏求陞滓じ笘・・ｽ・ｽ荵昴Ψ郢ｧ・ｽE・ｽ郢晢ｽｫ郢ｧ・ｽE・ｽ邵ｺ・ｽE・ｽ陷讎奇ｿｽE隴幢ｿｽE
+            // dst 陷繝ｻ・ｽE・ｽ・ｽE・ｽ邵ｺ繝ｻsrc 邵ｺ・ｽE・ｽ騾｡・ｽE・ｽ邵ｺ・ｽE・ｽ郢ｧ繝ｻ遶奇ｿｽE隰・・ｽ・ｽ陌夊棔逕ｻ蟲ｩ邵ｺ・ｽE・ｽ髫穂ｹ晢ｿｽE邵ｺ蠍ｺ・ｽE・ｽ譎・・ｽ・ｽ
             var exclude = new FilterCondition
             {
                 singleTypeName = typeof(TextAsset).AssemblyQualifiedName,
@@ -952,7 +952,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             Assert.IsFalse(SyncContains(config, "file.txt"));
         }
 
-        // 笏笏笏 繝槭ル繝輔ぉ繧�E�繝�E(#42窶・4) 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
+        // 隨渉隨渉隨渉 郢晄ｧｭ繝ｫ郢晁ｼ斐♂郢ｧ・ｽE・ｽ郢晢ｿｽE(#42遯ｶ繝ｻ4) 隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉
 
         // #42
         [Test]
@@ -998,7 +998,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             var config = MakeConfig();
             config.syncRelativePaths = new List<string> { "a.txt", "a.txt", "A.txt", "sub\\b.txt" };
             config.syncRelativeDirectoryPaths = new List<string> { "sub", "sub/", "SUB", "x\\y" };
-            config.ignoreGuids = new List<string> { "", "g1", "g1", "g2" };
+            config.protectedGuids = new List<string> { "", "g1", "g1", "g2" };
 
             bool changed = AssetSyncer.NormalizeState(config);
 
@@ -1009,14 +1009,14 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             Assert.AreEqual(2, config.syncRelativeDirectoryPaths.Count);
             Assert.AreEqual("sub", config.syncRelativeDirectoryPaths[0]);
             Assert.AreEqual("x/y", config.syncRelativeDirectoryPaths[1]);
-            Assert.AreEqual(4, config.ignoreGuids.Count);
-            Assert.AreEqual("", config.ignoreGuids[0]);
-            Assert.AreEqual("g1", config.ignoreGuids[1]);
-            Assert.AreEqual("g1", config.ignoreGuids[2]);
-            Assert.AreEqual("g2", config.ignoreGuids[3]);
+            Assert.AreEqual(4, config.protectedGuids.Count);
+            Assert.AreEqual("", config.protectedGuids[0]);
+            Assert.AreEqual("g1", config.protectedGuids[1]);
+            Assert.AreEqual("g1", config.protectedGuids[2]);
+            Assert.AreEqual("g2", config.protectedGuids[3]);
         }
 
-        // 笏笏笏 Integration (#45窶・0) 笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏笏
+        // 隨渉隨渉隨渉 Integration (#45遯ｶ繝ｻ0) 隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉隨渉
 
         // #45
         [Test]
@@ -1053,7 +1053,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             Assert.AreEqual("hand-placed", ReadDst("manual.txt"));
         }
 
-        // #47 窶・縲訓reset蝙九ｒ蜷�E�繧縲阪ヵ繧�E�繝ｫ繧�E� + dst 縺�E�蛻�E�蜷恒reset 竊�Edst 縺�E� Preset 菫晁E��縲《rc 縺�E� Preset 繧めE��逹
+        // #47 遯ｶ繝ｻ邵ｲ險途eset陜吩ｹ晢ｽ定惺・ｽE・ｽ郢ｧﾂ邵ｲ髦ｪ繝ｵ郢ｧ・ｽE・ｽ郢晢ｽｫ郢ｧ・ｽE・ｽ + dst 邵ｺ・ｽE・ｽ陋ｻ・ｽE・ｽ陷ｷ諱池eset 遶奇ｿｽEdst 邵ｺ・ｽE・ｽ Preset 闖ｫ譎・・ｽ・ｽ邵ｲ縲較c 邵ｺ・ｽE・ｽ Preset 郢ｧ繧・・ｽ・ｽ騾ｹﾂ
         [Test]
         public void Integration_FilterIncludesType_OtherDstFileKept()
         {
@@ -1061,7 +1061,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             WriteDst("dst-preset.txt", "manual");
             AssetDatabase.Refresh();
 
-            // TextAsset 蝙九�E縺�E�險�E�蜿�E�
+            // TextAsset 陜吩ｹ晢ｿｽE邵ｺ・ｽE・ｽ髫ｪ・ｽE・ｽ陷ｿ・ｽE・ｽ
             var include = new FilterCondition { singleTypeName = typeof(TextAsset).AssemblyQualifiedName };
             AssetSyncer.SyncConfig(MakeConfig(new List<FilterCondition> { include }));
 
@@ -1069,7 +1069,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             Assert.IsTrue(DstExists("dst-preset.txt"), "manually placed file must not be touched");
         }
 
-        // #48 窶・縲訓reset蝙九ｒ髯�E�螟悶阪ヵ繧�E�繝ｫ繧�E� + dst 縺�E�蛻�E�蜷恒reset 竊�Edst 縺�E� Preset 菫晁E��
+        // #48 遯ｶ繝ｻ邵ｲ險途eset陜吩ｹ晢ｽ帝ｫｯ・ｽE・ｽ陞滓じﾂ髦ｪ繝ｵ郢ｧ・ｽE・ｽ郢晢ｽｫ郢ｧ・ｽE・ｽ + dst 邵ｺ・ｽE・ｽ陋ｻ・ｽE・ｽ陷ｷ諱池eset 遶奇ｿｽEdst 邵ｺ・ｽE・ｽ Preset 闖ｫ譎・・ｽ・ｽ
         [Test]
         public void Integration_FilterExcludesType_ManualDstFileKept()
         {
@@ -1077,7 +1077,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             WriteDst("manual.txt", "manual");
             AssetDatabase.Refresh();
 
-            // TextAsset 髯�E�螟�E竊�Esrc 縺�E�繝輔ぃ繧�E�繝ｫ縺�E�繧�E�繝斐・縺輔ｌ縺�E�縺・
+            // TextAsset 鬮ｯ・ｽE・ｽ陞滂ｿｽE遶奇ｿｽEsrc 邵ｺ・ｽE・ｽ郢晁ｼ斐＜郢ｧ・ｽE・ｽ郢晢ｽｫ邵ｺ・ｽE・ｽ郢ｧ・ｽE・ｽ郢晄鱒繝ｻ邵ｺ霈費ｽ檎ｸｺ・ｽE・ｽ邵ｺ繝ｻ
             var exclude = new FilterCondition
             {
                 singleTypeName = typeof(TextAsset).AssemblyQualifiedName,
@@ -1090,7 +1090,75 @@ namespace Nyorowrl.AssetSync.Editor.Tests
         }
 
         [Test]
-        public void IgnoreDestination_RemoveProtection_ResumesSyncWithoutConflict()
+        public void Integration_FilterIncludeAsset_OnlySelectedAssetCopied()
+        {
+            WriteSrc("a.txt", "A");
+            WriteSrc("b.txt", "B");
+            AssetDatabase.Refresh();
+
+            string selectedGuid = AssetDatabase.AssetPathToGUID(_srcAssetPath + "/a.txt");
+            Assume.That(!string.IsNullOrEmpty(selectedGuid), "source guid must exist");
+
+            var includeSelectedAsset = new FilterCondition
+            {
+                targetKind = FilterConditionTargetKind.Asset,
+                singleAssetGuid = selectedGuid
+            };
+
+            AssetSyncer.SyncConfig(MakeConfig(new List<FilterCondition> { includeSelectedAsset }));
+
+            Assert.IsTrue(DstExists("a.txt"));
+            Assert.IsFalse(DstExists("b.txt"));
+        }
+
+        [Test]
+        public void Integration_FilterExcludeAsset_SelectedAssetExcluded()
+        {
+            WriteSrc("a.txt", "A");
+            WriteSrc("b.txt", "B");
+            AssetDatabase.Refresh();
+
+            string excludedGuid = AssetDatabase.AssetPathToGUID(_srcAssetPath + "/a.txt");
+            Assume.That(!string.IsNullOrEmpty(excludedGuid), "source guid must exist");
+
+            var excludeSelectedAsset = new FilterCondition
+            {
+                targetKind = FilterConditionTargetKind.Asset,
+                singleAssetGuid = excludedGuid,
+                invert = true
+            };
+
+            AssetSyncer.SyncConfig(MakeConfig(new List<FilterCondition> { excludeSelectedAsset }));
+
+            Assert.IsFalse(DstExists("a.txt"));
+            Assert.IsTrue(DstExists("b.txt"));
+        }
+
+        [Test]
+        public void Integration_FilterAsset_InvalidOutsideSource_NoEffect()
+        {
+            WriteSrc("a.txt", "A");
+            WriteSrc("b.txt", "B");
+            WriteDst("manual.txt", "manual");
+            AssetDatabase.Refresh();
+
+            string outsideGuid = AssetDatabase.AssetPathToGUID(_dstAssetPath + "/manual.txt");
+            Assume.That(!string.IsNullOrEmpty(outsideGuid), "outside guid must exist");
+
+            var includeOutsideAsset = new FilterCondition
+            {
+                targetKind = FilterConditionTargetKind.Asset,
+                singleAssetGuid = outsideGuid
+            };
+
+            AssetSyncer.SyncConfig(MakeConfig(new List<FilterCondition> { includeOutsideAsset }));
+
+            Assert.IsTrue(DstExists("a.txt"));
+            Assert.IsTrue(DstExists("b.txt"));
+        }
+
+        [Test]
+        public void ProtectedDestination_RemoveProtection_ResumesSyncWithoutConflict()
         {
             var config = MakeConfig();
             WriteSrc("file.txt", "v1");
@@ -1103,19 +1171,19 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             string dstGuid = AssetDatabase.AssetPathToGUID(dstAssetPath);
             Assume.That(!string.IsNullOrEmpty(dstGuid), "destination GUID must be available");
 
-            config.ignoreGuids.Add(dstGuid);
+            config.protectedGuids.Add(dstGuid);
             WriteSrc("file.txt", "v2");
             AssetSyncer.SyncConfig(config);
-            Assert.AreEqual("v1", ReadDst("file.txt"), "destination ignore file should not update");
-            Assert.IsTrue(SyncContains(config, "file.txt"), "synced state should be retained while destination is ignore");
+            Assert.AreEqual("v1", ReadDst("file.txt"), "protected destination file should not update");
+            Assert.IsTrue(SyncContains(config, "file.txt"), "synced state should be retained while destination is protected");
 
-            config.ignoreGuids.Remove(dstGuid);
+            config.protectedGuids.Remove(dstGuid);
             AssetSyncer.SyncConfig(config);
             Assert.AreEqual("v2", ReadDst("file.txt"), "sync should resume after removing destination protection");
         }
 
         [Test]
-        public void IgnoreDestination_RemoveProtection_AfterDisableEnable_ResumesSyncWithoutConflict()
+        public void ProtectedDestination_RemoveProtection_AfterDisableEnable_ResumesSyncWithoutConflict()
         {
             var config = MakeConfig();
             WriteSrc("file.txt", "v1");
@@ -1128,16 +1196,16 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             string dstGuid = AssetDatabase.AssetPathToGUID(dstAssetPath);
             Assume.That(!string.IsNullOrEmpty(dstGuid), "destination GUID must be available");
 
-            config.ignoreGuids.Add(dstGuid);
+            config.protectedGuids.Add(dstGuid);
             WriteSrc("file.txt", "v2");
             AssetSyncer.SyncConfig(config);
-            Assert.AreEqual("v1", ReadDst("file.txt"), "destination ignore file should not update");
-            Assert.IsTrue(SyncContains(config, "file.txt"), "synced state should be retained while destination is ignore");
+            Assert.AreEqual("v1", ReadDst("file.txt"), "protected destination file should not update");
+            Assert.IsTrue(SyncContains(config, "file.txt"), "synced state should be retained while destination is protected");
 
             config.enabled = false;
             AssetSyncer.SyncConfig(config);
-            Assert.IsTrue(DstExists("file.txt"), "destination ignore file should remain when sync is disabled");
-            Assert.IsTrue(SyncContains(config, "file.txt"), "synced state should be retained for destination ignore files while disabled");
+            Assert.IsTrue(DstExists("file.txt"), "protected destination file should remain when sync is disabled");
+            Assert.IsTrue(SyncContains(config, "file.txt"), "synced state should be retained for protected files while disabled");
 
             config.enabled = true;
             AssetSyncer.SyncConfig(config);
@@ -1152,7 +1220,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
                 return true;
             };
 
-            config.ignoreGuids.Remove(dstGuid);
+            config.protectedGuids.Remove(dstGuid);
             AssetSyncer.SyncConfig(config);
 
             Assert.AreEqual(0, conflictDialogCalls, "removing destination protection should not open conflicts dialog");
@@ -1172,14 +1240,14 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             AssetDatabase.Refresh();
             string dstGuid = AssetDatabase.AssetPathToGUID(_dstAssetPath + "/file.txt");
             Assume.That(!string.IsNullOrEmpty(dstGuid), "destination guid must be available");
-            config.ignoreGuids.Add(dstGuid);
+            config.protectedGuids.Add(dstGuid);
 
             config.enabled = false;
             AssetSyncer.SyncConfig(config);
-            Assert.IsTrue(DstExists("file.txt"), "destination ignore file should remain when disabled");
-            Assert.IsTrue(SyncContains(config, "file.txt"), "synced should remain while destination is ignore");
+            Assert.IsTrue(DstExists("file.txt"), "protected destination file should remain when disabled");
+            Assert.IsTrue(SyncContains(config, "file.txt"), "synced should remain while destination is protected");
 
-            config.ignoreGuids.Remove(dstGuid);
+            config.protectedGuids.Remove(dstGuid);
             bool changed = AssetSyncer.PruneSyncPathsForDisabledConfig(config);
 
             Assert.IsTrue(changed, "removing destination protection while disabled should drop synced state");
@@ -1188,7 +1256,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
         }
 
         [Test]
-        public void CollectSyncedDestinationSyncRelativePaths_ExcludesDestinationIgnore()
+        public void CollectSyncedDestinationSyncRelativePaths_ExcludesProtectedDestination()
         {
             var config = MakeConfig();
             WriteSrc("ignore.txt", "p1");
@@ -1197,12 +1265,67 @@ namespace Nyorowrl.AssetSync.Editor.Tests
 
             AssetDatabase.Refresh();
             string ignoreGuid = AssetDatabase.AssetPathToGUID(_dstAssetPath + "/ignore.txt");
-            Assume.That(!string.IsNullOrEmpty(ignoreGuid), "destination ignore asset guid must exist");
-            config.ignoreGuids.Add(ignoreGuid);
+            Assume.That(!string.IsNullOrEmpty(ignoreGuid), "destination protected asset guid must exist");
+            config.protectedGuids.Add(ignoreGuid);
 
             HashSet<string> syncedSync = AssetSyncer.CollectSyncedDestinationSyncRelativePaths(config);
             Assert.IsFalse(syncedSync.Contains("ignore.txt"));
             Assert.IsTrue(syncedSync.Contains("normal.txt"));
+        }
+
+        [Test]
+        public void ProtectedFolder_DescendantFile_IsNotUpdated()
+        {
+            var config = MakeConfig();
+            WriteSrc("ProtectedSub/file.txt", "v1");
+            AssetSyncer.SyncConfig(config);
+            Assert.AreEqual("v1", ReadDst("ProtectedSub/file.txt"));
+
+            AssetDatabase.Refresh();
+            string protectedFolderGuid = AssetDatabase.AssetPathToGUID(_dstAssetPath + "/ProtectedSub");
+            Assume.That(!string.IsNullOrEmpty(protectedFolderGuid), "destination protected folder guid must exist");
+            config.protectedGuids.Add(protectedFolderGuid);
+
+            WriteSrc("ProtectedSub/file.txt", "v2");
+            AssetSyncer.SyncConfig(config);
+
+            Assert.AreEqual("v1", ReadDst("ProtectedSub/file.txt"), "file under protected folder should not be updated");
+        }
+
+        [Test]
+        public void ProtectedEntry_OutsideDestination_IsIgnored()
+        {
+            var config = MakeConfig();
+            WriteSrc("file.txt", "v1");
+            AssetSyncer.SyncConfig(config);
+            Assert.AreEqual("v1", ReadDst("file.txt"));
+
+            AssetDatabase.Refresh();
+            string sourceGuid = AssetDatabase.AssetPathToGUID(_srcAssetPath + "/file.txt");
+            Assume.That(!string.IsNullOrEmpty(sourceGuid), "source guid must exist");
+            config.protectedGuids.Add(sourceGuid);
+
+            WriteSrc("file.txt", "v2");
+            AssetSyncer.SyncConfig(config);
+
+            Assert.AreEqual("v2", ReadDst("file.txt"), "outside-destination protected entry must be ignored");
+        }
+
+        [Test]
+        public void ConflictKeep_AddsProtectedGuid()
+        {
+            var config = MakeConfig();
+            WriteSrc("conflict.txt", "src-v1");
+            WriteDst("conflict.txt", "manual-v1");
+            AssetDatabase.Refresh();
+
+            AssetSyncer.SyncConfig(config);
+            Assert.AreEqual("manual-v1", ReadDst("conflict.txt"), "keep decision should preserve destination content");
+
+            AssetDatabase.Refresh();
+            string destinationGuid = AssetDatabase.AssetPathToGUID(_dstAssetPath + "/conflict.txt");
+            Assume.That(!string.IsNullOrEmpty(destinationGuid), "destination guid must exist");
+            CollectionAssert.Contains(config.protectedGuids, destinationGuid, "keep decision should register protected destination asset");
         }
 
         [Test]
@@ -1313,3 +1436,4 @@ namespace Nyorowrl.AssetSync.Editor.Tests
 
     }
 }
+

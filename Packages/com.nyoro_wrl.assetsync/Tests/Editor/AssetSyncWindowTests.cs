@@ -76,13 +76,13 @@ namespace Nyorowrl.AssetSync.Editor.Tests
 
             string dstGuid = AssetDatabase.AssetPathToGUID(_dstAssetPath + "/" + relativePath);
             Assume.That(!string.IsNullOrEmpty(dstGuid), "destination guid must exist");
-            config.ignoreGuids.Add(dstGuid);
+            config.protectedGuids.Add(dstGuid);
 
             config.enabled = false;
             AssetSyncer.SyncConfig(config);
-            Assert.IsTrue(File.Exists(dstFilePath), "destination ignore file should remain after disabling");
+            Assert.IsTrue(File.Exists(dstFilePath), "protected destination file should remain after disabling");
 
-            config.ignoreGuids.Remove(dstGuid);
+            config.protectedGuids.Remove(dstGuid);
             Assert.IsTrue(config.syncRelativePaths.Contains("file.txt"), "synced path should still exist before apply");
 
             var settings = ScriptableObject.CreateInstance<AssetSyncSettings>();
@@ -392,6 +392,60 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             Assert.IsFalse((bool)canInteractMethod.Invoke(null, new object[] { disabledInvalid }), "disabled config with invalid setup must not be enable-toggle interactive");
             Assert.IsTrue((bool)canInteractMethod.Invoke(null, new object[] { disabledValid }), "disabled config with valid setup should be enable-toggle interactive");
             Assert.IsTrue((bool)canInteractMethod.Invoke(null, new object[] { enabledInvalid }), "enabled config should allow toggling off regardless of setup");
+        }
+
+        [Test]
+        public void IsFilterAssetGuidValid_OutsideSource_ReturnsFalse()
+        {
+            string sourceFilePath = _srcAssetPath + "/in-source.txt";
+            string destinationFilePath = _dstAssetPath + "/in-destination.txt";
+            File.WriteAllText(Path.Combine(_srcFullPath, "in-source.txt"), "source");
+            File.WriteAllText(Path.Combine(_dstFullPath, "in-destination.txt"), "destination");
+            AssetDatabase.Refresh();
+
+            string sourceGuid = AssetDatabase.AssetPathToGUID(sourceFilePath);
+            string destinationGuid = AssetDatabase.AssetPathToGUID(destinationFilePath);
+            Assume.That(!string.IsNullOrEmpty(sourceGuid), "source guid must exist");
+            Assume.That(!string.IsNullOrEmpty(destinationGuid), "destination guid must exist");
+
+            MethodInfo isFilterAssetGuidValidMethod = typeof(AssetSyncWindow).GetMethod("IsFilterAssetGuidValid", BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.IsNotNull(isFilterAssetGuidValidMethod, "IsFilterAssetGuidValid method not found");
+
+            var config = new SyncConfig
+            {
+                sourcePath = _srcAssetPath,
+                destinationPath = _dstAssetPath
+            };
+
+            Assert.IsTrue((bool)isFilterAssetGuidValidMethod.Invoke(null, new object[] { config, sourceGuid }));
+            Assert.IsFalse((bool)isFilterAssetGuidValidMethod.Invoke(null, new object[] { config, destinationGuid }));
+        }
+
+        [Test]
+        public void IsProtectedGuidValid_OutsideDestination_ReturnsFalse()
+        {
+            string sourceFilePath = _srcAssetPath + "/in-source.txt";
+            string destinationFilePath = _dstAssetPath + "/in-destination.txt";
+            File.WriteAllText(Path.Combine(_srcFullPath, "in-source.txt"), "source");
+            File.WriteAllText(Path.Combine(_dstFullPath, "in-destination.txt"), "destination");
+            AssetDatabase.Refresh();
+
+            string sourceGuid = AssetDatabase.AssetPathToGUID(sourceFilePath);
+            string destinationGuid = AssetDatabase.AssetPathToGUID(destinationFilePath);
+            Assume.That(!string.IsNullOrEmpty(sourceGuid), "source guid must exist");
+            Assume.That(!string.IsNullOrEmpty(destinationGuid), "destination guid must exist");
+
+            MethodInfo isProtectedGuidValidMethod = typeof(AssetSyncWindow).GetMethod("IsProtectedGuidValid", BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.IsNotNull(isProtectedGuidValidMethod, "IsProtectedGuidValid method not found");
+
+            var config = new SyncConfig
+            {
+                sourcePath = _srcAssetPath,
+                destinationPath = _dstAssetPath
+            };
+
+            Assert.IsTrue((bool)isProtectedGuidValidMethod.Invoke(null, new object[] { config, destinationGuid }));
+            Assert.IsFalse((bool)isProtectedGuidValidMethod.Invoke(null, new object[] { config, sourceGuid }));
         }
 
         private string CreateSettingsAssetPath(string assetName, List<SyncConfig> configs)

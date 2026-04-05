@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
@@ -43,19 +43,19 @@ namespace Nyorowrl.AssetSync.Editor.Tests
         }
 
         [Test]
-        public void RebuildSyncedPathCache_DestinationIgnoreSyncFile_DoesNotShowBadge()
+        public void RebuildSyncedPathCache_ProtectedSyncFile_DoesNotShowBadge()
         {
             string projectRoot = Path.GetDirectoryName(Application.dataPath);
-            string ignoreRelativePath = "ignore.txt";
+            string protectedRelativePath = "ignore.txt";
             string normalRelativePath = "normal.txt";
 
-            File.WriteAllText(Path.Combine(projectRoot, _dstAssetPath, ignoreRelativePath), "ignore");
+            File.WriteAllText(Path.Combine(projectRoot, _dstAssetPath, protectedRelativePath), "ignore");
             File.WriteAllText(Path.Combine(projectRoot, _srcAssetPath, normalRelativePath), "normal");
             AssetDatabase.Refresh();
 
-            string ignoreDestinationAssetPath = _dstAssetPath + "/" + ignoreRelativePath;
-            string ignoreGuid = AssetDatabase.AssetPathToGUID(ignoreDestinationAssetPath);
-            Assume.That(!string.IsNullOrEmpty(ignoreGuid), "destination ignore asset guid must exist");
+            string protectedDestinationAssetPath = _dstAssetPath + "/" + protectedRelativePath;
+            string protectedGuid = AssetDatabase.AssetPathToGUID(protectedDestinationAssetPath);
+            Assume.That(!string.IsNullOrEmpty(protectedGuid), "destination protected asset guid must exist");
 
             var settings = ScriptableObject.CreateInstance<AssetSyncSettings>();
             settings.syncConfigs = new List<SyncConfig>
@@ -66,8 +66,8 @@ namespace Nyorowrl.AssetSync.Editor.Tests
                     enabled = true,
                     sourcePath = _srcAssetPath,
                     destinationPath = _dstAssetPath,
-                    syncRelativePaths = new List<string> { ignoreRelativePath, normalRelativePath },
-                    ignoreGuids = new List<string> { ignoreGuid }
+                    syncRelativePaths = new List<string> { protectedRelativePath, normalRelativePath },
+                    protectedGuids = new List<string> { protectedGuid }
                 }
             };
 
@@ -89,11 +89,11 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             Assert.IsNotNull(syncedPaths, "SyncedAssetPaths must be a HashSet<string>");
 
             string destinationRoot = _dstAssetPath;
-            string ignoreFullPath = destinationRoot + "/" + ignoreRelativePath;
+            string protectedFullPath = destinationRoot + "/" + protectedRelativePath;
             string normalFullPath = destinationRoot + "/" + normalRelativePath;
 
-            Assert.IsFalse(syncedPaths.Contains(ignoreFullPath), "destination-ignore synced path should not show synced badge");
-            Assert.IsTrue(syncedPaths.Contains(normalFullPath), "non-ignore synced path should still show synced badge");
+            Assert.IsFalse(syncedPaths.Contains(protectedFullPath), "protected synced path should not show synced badge");
+            Assert.IsTrue(syncedPaths.Contains(normalFullPath), "non-protected synced path should still show synced badge");
         }
 
         [Test]
@@ -115,7 +115,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
                     sourcePath = _srcAssetPath,
                     destinationPath = _dstAssetPath,
                     syncRelativePaths = new List<string> { relativePath },
-                    ignoreGuids = new List<string>()
+                    protectedGuids = new List<string>()
                 }
             };
 
@@ -161,7 +161,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
                     sourcePath = _srcAssetPath,
                     destinationPath = _dstAssetPath,
                     syncRelativePaths = new List<string> { relativePath },
-                    ignoreGuids = new List<string>()
+                    protectedGuids = new List<string>()
                 }
             };
 
@@ -189,3 +189,4 @@ namespace Nyorowrl.AssetSync.Editor.Tests
         }
     }
 }
+
