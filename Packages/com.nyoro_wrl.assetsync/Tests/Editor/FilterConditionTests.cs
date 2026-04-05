@@ -53,8 +53,8 @@ namespace Nyorowrl.AssetSync.Editor.Tests
         {
             var filters = new List<FilterCondition>
             {
-                new FilterCondition { singleTypeName = typeof(TextAsset).AssemblyQualifiedName },
-                new FilterCondition { singleTypeName = typeof(Texture2D).AssemblyQualifiedName, invert = true }
+                new FilterCondition { multipleTypeNames = new List<string> { typeof(TextAsset).AssemblyQualifiedName } },
+                new FilterCondition { multipleTypeNames = new List<string> { typeof(Texture2D).AssemblyQualifiedName }, invert = true }
             };
 
             Assert.IsTrue(AssetSyncer.PassesFilters(_txtAssetPath, filters));
@@ -65,8 +65,8 @@ namespace Nyorowrl.AssetSync.Editor.Tests
         {
             var filters = new List<FilterCondition>
             {
-                new FilterCondition { singleTypeName = typeof(TextAsset).AssemblyQualifiedName },
-                new FilterCondition { singleTypeName = typeof(TextAsset).AssemblyQualifiedName, invert = true }
+                new FilterCondition { multipleTypeNames = new List<string> { typeof(TextAsset).AssemblyQualifiedName } },
+                new FilterCondition { multipleTypeNames = new List<string> { typeof(TextAsset).AssemblyQualifiedName }, invert = true }
             };
 
             Assert.IsFalse(AssetSyncer.PassesFilters(_txtAssetPath, filters));
@@ -80,12 +80,12 @@ namespace Nyorowrl.AssetSync.Editor.Tests
                 new FilterCondition
                 {
                     targetKind = FilterConditionTargetKind.Asset,
-                    singleAssetGuid = AssetDatabase.AssetPathToGUID(_txtAssetPath)
+                    multipleAssetGuids = new List<string> { AssetDatabase.AssetPathToGUID(_txtAssetPath) }
                 },
                 new FilterCondition
                 {
                     targetKind = FilterConditionTargetKind.Asset,
-                    singleAssetGuid = AssetDatabase.AssetPathToGUID(_nestedAssetPath)
+                    multipleAssetGuids = new List<string> { AssetDatabase.AssetPathToGUID(_nestedAssetPath) }
                 }
             };
 
@@ -101,12 +101,12 @@ namespace Nyorowrl.AssetSync.Editor.Tests
                 new FilterCondition
                 {
                     targetKind = FilterConditionTargetKind.Asset,
-                    singleAssetGuid = AssetDatabase.AssetPathToGUID(_outsideAssetPath)
+                    multipleAssetGuids = new List<string> { AssetDatabase.AssetPathToGUID(_outsideAssetPath) }
                 },
                 new FilterCondition
                 {
                     targetKind = FilterConditionTargetKind.Asset,
-                    singleAssetGuid = AssetDatabase.AssetPathToGUID(_txtAssetPath)
+                    multipleAssetGuids = new List<string> { AssetDatabase.AssetPathToGUID(_txtAssetPath) }
                 }
             };
 
@@ -115,44 +115,57 @@ namespace Nyorowrl.AssetSync.Editor.Tests
         }
 
         [Test]
-        public void SingleType_Matching_ReturnsTrue()
+        public void PassesFilters_TypeIncludeAndAssetInclude_AreCombinedWithOr()
         {
-            var f = new FilterCondition { singleTypeName = typeof(TextAsset).AssemblyQualifiedName };
+            var filters = new List<FilterCondition>
+            {
+                new FilterCondition
+                {
+                    multipleTypeNames = new List<string> { typeof(Texture2D).AssemblyQualifiedName }
+                },
+                new FilterCondition
+                {
+                    targetKind = FilterConditionTargetKind.Asset,
+                    multipleAssetGuids = new List<string> { AssetDatabase.AssetPathToGUID(_txtAssetPath) }
+                }
+            };
+
+            Assert.IsTrue(AssetSyncer.PassesFilters(_txtAssetPath, filters, TestDir));
+            Assert.IsFalse(AssetSyncer.PassesFilters(_nestedAssetPath, filters, TestDir));
+        }
+
+        [Test]
+        public void TypeList_SingleEntry_Matching_ReturnsTrue()
+        {
+            var f = new FilterCondition { multipleTypeNames = new List<string> { typeof(TextAsset).AssemblyQualifiedName } };
             Assert.IsTrue(AssetSyncer.EvaluateCondition(f, _txtAssetPath));
         }
 
         [Test]
-        public void SingleType_NonMatching_ReturnsFalse()
+        public void TypeList_SingleEntry_NonMatching_ReturnsFalse()
         {
-            var f = new FilterCondition { singleTypeName = typeof(Texture2D).AssemblyQualifiedName };
+            var f = new FilterCondition { multipleTypeNames = new List<string> { typeof(Texture2D).AssemblyQualifiedName } };
             Assert.IsFalse(AssetSyncer.EvaluateCondition(f, _txtAssetPath));
         }
 
         [Test]
-        public void SingleType_Invert_Matching_ReturnsFalse()
+        public void TypeList_SingleEntry_InvertNonMatching_ReturnsTrue()
         {
-            var f = new FilterCondition { singleTypeName = typeof(TextAsset).AssemblyQualifiedName, invert = true };
-            Assert.IsFalse(AssetSyncer.EvaluateCondition(f, _txtAssetPath));
-        }
-
-        [Test]
-        public void SingleType_Invert_NonMatching_ReturnsTrue()
-        {
-            var f = new FilterCondition { singleTypeName = typeof(Texture2D).AssemblyQualifiedName, invert = true };
+            var f = new FilterCondition { multipleTypeNames = new List<string> { typeof(Texture2D).AssemblyQualifiedName }, invert = true };
             Assert.IsTrue(AssetSyncer.EvaluateCondition(f, _txtAssetPath));
         }
 
         [Test]
-        public void EmptySingleTypeName_ReturnsTrue()
+        public void EmptyTypeEntry_ReturnsTrue()
         {
-            var f = new FilterCondition { singleTypeName = string.Empty };
+            var f = new FilterCondition { multipleTypeNames = new List<string> { string.Empty } };
             Assert.IsTrue(AssetSyncer.EvaluateCondition(f, _txtAssetPath));
         }
 
         [Test]
-        public void Invert_EmptySingleTypeName_ReturnsTrue()
+        public void Invert_EmptyTypeEntry_ReturnsTrue()
         {
-            var f = new FilterCondition { singleTypeName = string.Empty, invert = true };
+            var f = new FilterCondition { multipleTypeNames = new List<string> { string.Empty }, invert = true };
             Assert.IsTrue(AssetSyncer.EvaluateCondition(f, _txtAssetPath));
         }
 
@@ -161,7 +174,6 @@ namespace Nyorowrl.AssetSync.Editor.Tests
         {
             var f = new FilterCondition
             {
-                useMultipleTypes = true,
                 multipleTypeNames = new List<string>
                 {
                     typeof(TextAsset).AssemblyQualifiedName,
@@ -177,7 +189,6 @@ namespace Nyorowrl.AssetSync.Editor.Tests
         {
             var f = new FilterCondition
             {
-                useMultipleTypes = true,
                 multipleTypeNames = new List<string>
                 {
                     typeof(Texture2D).AssemblyQualifiedName,
@@ -193,7 +204,6 @@ namespace Nyorowrl.AssetSync.Editor.Tests
         {
             var f = new FilterCondition
             {
-                useMultipleTypes = true,
                 invert = true,
                 multipleTypeNames = new List<string> { typeof(TextAsset).AssemblyQualifiedName }
             };
@@ -202,74 +212,49 @@ namespace Nyorowrl.AssetSync.Editor.Tests
         }
 
         [Test]
-        public void EmptyMultipleTypeNames_ReturnsTrue()
-        {
-            var f = new FilterCondition
-            {
-                useMultipleTypes = true,
-                multipleTypeNames = new List<string>()
-            };
-
-            Assert.IsTrue(AssetSyncer.EvaluateCondition(f, _txtAssetPath));
-        }
-
-        [Test]
-        public void Invert_EmptyMultipleTypeNames_ReturnsTrue()
-        {
-            var f = new FilterCondition
-            {
-                useMultipleTypes = true,
-                invert = true,
-                multipleTypeNames = new List<string>()
-            };
-
-            Assert.IsTrue(AssetSyncer.EvaluateCondition(f, _txtAssetPath));
-        }
-
-        [Test]
-        public void AssetSingle_FileMatch_ReturnsTrue()
+        public void AssetList_SingleEntry_FileMatch_ReturnsTrue()
         {
             var f = new FilterCondition
             {
                 targetKind = FilterConditionTargetKind.Asset,
-                singleAssetGuid = AssetDatabase.AssetPathToGUID(_txtAssetPath)
+                multipleAssetGuids = new List<string> { AssetDatabase.AssetPathToGUID(_txtAssetPath) }
             };
 
             Assert.IsTrue(AssetSyncer.EvaluateCondition(f, _txtAssetPath, TestDir));
         }
 
         [Test]
-        public void AssetSingle_FileMismatch_ReturnsFalse()
+        public void AssetList_SingleEntry_FileMismatch_ReturnsFalse()
         {
             var f = new FilterCondition
             {
                 targetKind = FilterConditionTargetKind.Asset,
-                singleAssetGuid = AssetDatabase.AssetPathToGUID(_txtAssetPath)
+                multipleAssetGuids = new List<string> { AssetDatabase.AssetPathToGUID(_txtAssetPath) }
             };
 
             Assert.IsFalse(AssetSyncer.EvaluateCondition(f, _nestedAssetPath, TestDir));
         }
 
         [Test]
-        public void AssetSingle_Invert_FileMismatch_ReturnsTrue()
+        public void AssetList_SingleEntry_InvertFileMismatch_ReturnsTrue()
         {
             var f = new FilterCondition
             {
                 targetKind = FilterConditionTargetKind.Asset,
                 invert = true,
-                singleAssetGuid = AssetDatabase.AssetPathToGUID(_txtAssetPath)
+                multipleAssetGuids = new List<string> { AssetDatabase.AssetPathToGUID(_txtAssetPath) }
             };
 
             Assert.IsTrue(AssetSyncer.EvaluateCondition(f, _nestedAssetPath, TestDir));
         }
 
         [Test]
-        public void AssetSingle_FolderMatchesDescendant_ReturnsTrue()
+        public void AssetList_SingleEntry_FolderMatchesDescendant_ReturnsTrue()
         {
             var f = new FilterCondition
             {
                 targetKind = FilterConditionTargetKind.Asset,
-                singleAssetGuid = AssetDatabase.AssetPathToGUID(TestDir + "/Sub")
+                multipleAssetGuids = new List<string> { AssetDatabase.AssetPathToGUID(TestDir + "/Sub") }
             };
 
             Assert.IsTrue(AssetSyncer.EvaluateCondition(f, _nestedAssetPath, TestDir));
@@ -281,7 +266,6 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             var f = new FilterCondition
             {
                 targetKind = FilterConditionTargetKind.Asset,
-                useMultipleTypes = true,
                 multipleAssetGuids = new List<string>
                 {
                     AssetDatabase.AssetPathToGUID(_outsideAssetPath),
@@ -294,25 +278,25 @@ namespace Nyorowrl.AssetSync.Editor.Tests
         }
 
         [Test]
-        public void AssetSingle_OutsideSource_NoOp_ReturnsTrue()
+        public void AssetList_SingleEntry_OutsideSource_NoOp_ReturnsTrue()
         {
             var f = new FilterCondition
             {
                 targetKind = FilterConditionTargetKind.Asset,
-                singleAssetGuid = AssetDatabase.AssetPathToGUID(_outsideAssetPath)
+                multipleAssetGuids = new List<string> { AssetDatabase.AssetPathToGUID(_outsideAssetPath) }
             };
 
             Assert.IsTrue(AssetSyncer.EvaluateCondition(f, _txtAssetPath, TestDir));
         }
 
         [Test]
-        public void AssetSingle_OutsideSource_InvertNoOp_ReturnsTrue()
+        public void AssetList_SingleEntry_OutsideSource_InvertNoOp_ReturnsTrue()
         {
             var f = new FilterCondition
             {
                 targetKind = FilterConditionTargetKind.Asset,
                 invert = true,
-                singleAssetGuid = AssetDatabase.AssetPathToGUID(_outsideAssetPath)
+                multipleAssetGuids = new List<string> { AssetDatabase.AssetPathToGUID(_outsideAssetPath) }
             };
 
             Assert.IsTrue(AssetSyncer.EvaluateCondition(f, _txtAssetPath, TestDir));
@@ -324,7 +308,6 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             var f = new FilterCondition
             {
                 targetKind = FilterConditionTargetKind.Asset,
-                useMultipleTypes = true,
                 multipleAssetGuids = new List<string>
                 {
                     AssetDatabase.AssetPathToGUID(_outsideAssetPath),

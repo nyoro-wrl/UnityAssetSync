@@ -603,7 +603,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             AssetDatabase.Refresh();
 
             // Texture2D 陜吩ｹ晢ｿｽE邵ｺ・ｽE・ｽ髫ｪ・ｽE・ｽ陷ｿ・ｽE・ｽ 遶奇ｿｽETextAsset 邵ｺ・ｽE・ｽ鬮ｯ・ｽE・ｽ陞滂ｿｽE
-            var filter = new FilterCondition { singleTypeName = typeof(Texture2D).AssemblyQualifiedName };
+            var filter = new FilterCondition { multipleTypeNames = new List<string> { typeof(Texture2D).AssemblyQualifiedName } };
             AssetSyncer.SyncConfig(MakeConfig(new List<FilterCondition> { filter }));
             Assert.IsFalse(DstExists("file.txt"));
         }
@@ -616,7 +616,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             AssetDatabase.Refresh();
 
             // TextAsset 陜吩ｹ晢ｿｽE邵ｺ・ｽE・ｽ髫ｪ・ｽE・ｽ陷ｿ・ｽE・ｽ 遶奇ｿｽE.txt 邵ｺ・ｽE・ｽ郢ｧ・ｽE・ｽ郢晄鱒繝ｻ邵ｺ霈費ｽ檎ｹｧ繝ｻ
-            var filter = new FilterCondition { singleTypeName = typeof(TextAsset).AssemblyQualifiedName };
+            var filter = new FilterCondition { multipleTypeNames = new List<string> { typeof(TextAsset).AssemblyQualifiedName } };
             AssetSyncer.SyncConfig(MakeConfig(new List<FilterCondition> { filter }));
             Assert.IsTrue(DstExists("file.txt"));
         }
@@ -781,7 +781,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             // src 邵ｺ・ｽE・ｽ郢晁ｼ斐＜郢ｧ・ｽE・ｽ郢晢ｽｫ郢ｧ蛛ｵ繝ｵ郢ｧ・ｽE・ｽ郢晢ｽｫ郢ｧ・ｽE・ｽ邵ｺ・ｽE・ｽ鬮ｯ・ｽE・ｽ陞滓じ・ｽE・ｽ邵ｺ・ｽE・ｽ陷ｷ譴ｧ謔・・ｽE繝ｻst 邵ｺ・ｽE・ｽ file.txt 邵ｺ・ｽE・ｽ郢晄ｧｭ繝ｫ郢晁ｼ斐♂郢ｧ・ｽE・ｽ郢晏現竊楢怦・ｽE・ｽ郢ｧ蟲ｨ竊醍ｸｺ繝ｻ・ｽE・ｽ繝ｻ
             var exclude = new FilterCondition
             {
-                singleTypeName = typeof(TextAsset).AssemblyQualifiedName,
+                multipleTypeNames = new List<string> { typeof(TextAsset).AssemblyQualifiedName },
                 invert = true
             };
             AssetDatabase.Refresh();
@@ -806,7 +806,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
 
             var exclude = new FilterCondition
             {
-                singleTypeName = typeof(TextAsset).AssemblyQualifiedName,
+                multipleTypeNames = new List<string> { typeof(TextAsset).AssemblyQualifiedName },
                 invert = true
             };
             config.filters = new List<FilterCondition> { exclude };
@@ -834,7 +834,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             // dst 陷繝ｻ・ｽE・ｽ・ｽE・ｽ邵ｺ繝ｻsrc 邵ｺ・ｽE・ｽ騾｡・ｽE・ｽ邵ｺ・ｽE・ｽ郢ｧ繝ｻ遶奇ｿｽE隰・・ｽ・ｽ陌夊棔逕ｻ蟲ｩ邵ｺ・ｽE・ｽ髫穂ｹ晢ｿｽE邵ｺ蠍ｺ・ｽE・ｽ譎・・ｽ・ｽ
             var exclude = new FilterCondition
             {
-                singleTypeName = typeof(TextAsset).AssemblyQualifiedName,
+                multipleTypeNames = new List<string> { typeof(TextAsset).AssemblyQualifiedName },
                 invert = true
             };
             config.filters = new List<FilterCondition> { exclude };
@@ -854,7 +854,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
 
             var exclude = new FilterCondition
             {
-                singleTypeName = typeof(TextAsset).AssemblyQualifiedName,
+                multipleTypeNames = new List<string> { typeof(TextAsset).AssemblyQualifiedName },
                 invert = true
             };
             config.filters = new List<FilterCondition> { exclude };
@@ -876,7 +876,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
 
             var exclude = new FilterCondition
             {
-                singleTypeName = typeof(TextAsset).AssemblyQualifiedName,
+                multipleTypeNames = new List<string> { typeof(TextAsset).AssemblyQualifiedName },
                 invert = true
             };
             config.filters = new List<FilterCondition> { exclude };
@@ -1085,7 +1085,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             AssetDatabase.Refresh();
 
             // TextAsset 陜吩ｹ晢ｿｽE邵ｺ・ｽE・ｽ髫ｪ・ｽE・ｽ陷ｿ・ｽE・ｽ
-            var include = new FilterCondition { singleTypeName = typeof(TextAsset).AssemblyQualifiedName };
+            var include = new FilterCondition { multipleTypeNames = new List<string> { typeof(TextAsset).AssemblyQualifiedName } };
             AssetSyncer.SyncConfig(MakeConfig(new List<FilterCondition> { include }));
 
             Assert.IsTrue(DstExists("src-preset.txt"), "src file that passes filter must be copied");
@@ -1103,7 +1103,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             // TextAsset 鬮ｯ・ｽE・ｽ陞滂ｿｽE遶奇ｿｽEsrc 邵ｺ・ｽE・ｽ郢晁ｼ斐＜郢ｧ・ｽE・ｽ郢晢ｽｫ邵ｺ・ｽE・ｽ郢ｧ・ｽE・ｽ郢晄鱒繝ｻ邵ｺ霈費ｽ檎ｸｺ・ｽE・ｽ邵ｺ繝ｻ
             var exclude = new FilterCondition
             {
-                singleTypeName = typeof(TextAsset).AssemblyQualifiedName,
+                multipleTypeNames = new List<string> { typeof(TextAsset).AssemblyQualifiedName },
                 invert = true
             };
             AssetSyncer.SyncConfig(MakeConfig(new List<FilterCondition> { exclude }));
@@ -1125,7 +1125,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             var includeSelectedAsset = new FilterCondition
             {
                 targetKind = FilterConditionTargetKind.Asset,
-                singleAssetGuid = selectedGuid
+                multipleAssetGuids = new List<string> { selectedGuid }
             };
 
             AssetSyncer.SyncConfig(MakeConfig(new List<FilterCondition> { includeSelectedAsset }));
@@ -1147,7 +1147,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             var excludeSelectedAsset = new FilterCondition
             {
                 targetKind = FilterConditionTargetKind.Asset,
-                singleAssetGuid = excludedGuid,
+                multipleAssetGuids = new List<string> { excludedGuid },
                 invert = true
             };
 
@@ -1171,7 +1171,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             var includeOutsideAsset = new FilterCondition
             {
                 targetKind = FilterConditionTargetKind.Asset,
-                singleAssetGuid = outsideGuid
+                multipleAssetGuids = new List<string> { outsideGuid }
             };
 
             AssetSyncer.SyncConfig(MakeConfig(new List<FilterCondition> { includeOutsideAsset }));

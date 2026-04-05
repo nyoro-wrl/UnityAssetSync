@@ -13,10 +13,7 @@ namespace Nyorowrl.AssetSync
     {
         public FilterConditionTargetKind targetKind;
         public bool invert;
-        public bool useMultipleTypes;
-        public string singleTypeName;
         public List<string> multipleTypeNames = new List<string>();
-        public string singleAssetGuid;
         public List<string> multipleAssetGuids = new List<string>();
     }
 }

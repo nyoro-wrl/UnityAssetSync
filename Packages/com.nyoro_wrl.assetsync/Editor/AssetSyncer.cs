@@ -1213,25 +1213,37 @@ namespace Nyorowrl.AssetSync.Editor
             if (filters == null || filters.Count == 0)
                 return true;
 
-            if (!PassesAssetIncludeFilters(assetPath, filters, sourceAssetRoot))
-                return false;
+            List<FilterCondition> assetIncludeFilters = filters.Where(IsAssetIncludeFilter).ToList();
+            List<FilterCondition> nonAssetIncludeFilters = filters.Where(f => !IsAssetIncludeFilter(f)).ToList();
+            bool nonAssetIncludePass = nonAssetIncludeFilters.All(f => EvaluateCondition(f, assetPath, sourceAssetRoot));
 
-            return filters
-                .Where(f => !IsAssetIncludeFilter(f))
-                .All(f => EvaluateCondition(f, assetPath, sourceAssetRoot));
+            if (assetIncludeFilters.Count == 0)
+                return nonAssetIncludePass;
+
+            bool assetIncludeMatch = EvaluateAssetIncludeOr(
+                assetPath,
+                assetIncludeFilters,
+                sourceAssetRoot,
+                out bool hasApplicableAssetInclude);
+
+            if (!hasApplicableAssetInclude)
+                return nonAssetIncludePass;
+
+            if (nonAssetIncludeFilters.Count == 0)
+                return assetIncludeMatch;
+
+            return nonAssetIncludePass || assetIncludeMatch;
         }
 
-        private static bool PassesAssetIncludeFilters(
+        private static bool EvaluateAssetIncludeOr(
             string assetPath,
             IEnumerable<FilterCondition> filters,
-            string sourceAssetRoot)
+            string sourceAssetRoot,
+            out bool hasApplicableIncludeFilter)
         {
-            bool hasApplicableIncludeFilter = false;
+            hasApplicableIncludeFilter = false;
             foreach (FilterCondition filter in filters)
             {
-                if (!IsAssetIncludeFilter(filter))
-                    continue;
-
                 bool matched = EvaluateAssetCondition(filter, assetPath, sourceAssetRoot, out bool noOp);
                 if (noOp)
                     continue;
@@ -1241,7 +1253,7 @@ namespace Nyorowrl.AssetSync.Editor
                     return true;
             }
 
-            return !hasApplicableIncludeFilter;
+            return false;
         }
 
         private static bool IsAssetIncludeFilter(FilterCondition condition)
@@ -1265,18 +1277,26 @@ namespace Nyorowrl.AssetSync.Editor
                 return condition.invert ? !matched : matched;
             }
 
-            if (condition.useMultipleTypes)
+            if (condition.multipleTypeNames == null || condition.multipleTypeNames.Count == 0)
+                return true;
+
+            bool hasTypeFilter = false;
+            matched = false;
+            foreach (string typeName in condition.multipleTypeNames)
             {
-                if (condition.multipleTypeNames == null || condition.multipleTypeNames.Count == 0)
-                    return true;
-                matched = condition.multipleTypeNames.Any(n => TypeMatchesAsset(n, assetPath));
+                if (string.IsNullOrWhiteSpace(typeName))
+                    continue;
+
+                hasTypeFilter = true;
+                if (TypeMatchesAsset(typeName, assetPath))
+                {
+                    matched = true;
+                    break;
+                }
             }
-            else
-            {
-                if (string.IsNullOrEmpty(condition.singleTypeName))
-                    return true;
-                matched = TypeMatchesAsset(condition.singleTypeName, assetPath);
-            }
+
+            if (!hasTypeFilter)
+                return true;
 
             return condition.invert ? !matched : matched;
         }
@@ -1287,40 +1307,28 @@ namespace Nyorowrl.AssetSync.Editor
             string sourceAssetRoot,
             out bool noOp)
         {
-            if (condition.useMultipleTypes)
-            {
-                if (condition.multipleAssetGuids == null || condition.multipleAssetGuids.Count == 0)
-                {
-                    noOp = true;
-                    return true;
-                }
-
-                bool hasValidTarget = false;
-                foreach (string guid in condition.multipleAssetGuids)
-                {
-                    if (!TryResolveAssetFilterTarget(guid, sourceAssetRoot, out string targetAssetPath, out bool targetIsFolder))
-                        continue;
-
-                    hasValidTarget = true;
-                    if (AssetFilterTargetMatchesAsset(assetPath, targetAssetPath, targetIsFolder))
-                    {
-                        noOp = false;
-                        return true;
-                    }
-                }
-
-                noOp = !hasValidTarget;
-                return !hasValidTarget;
-            }
-
-            if (!TryResolveAssetFilterTarget(condition.singleAssetGuid, sourceAssetRoot, out string singleTargetPath, out bool singleTargetIsFolder))
+            if (condition.multipleAssetGuids == null || condition.multipleAssetGuids.Count == 0)
             {
                 noOp = true;
                 return true;
             }
 
-            noOp = false;
-            return AssetFilterTargetMatchesAsset(assetPath, singleTargetPath, singleTargetIsFolder);
+            bool hasValidTarget = false;
+            foreach (string guid in condition.multipleAssetGuids)
+            {
+                if (!TryResolveAssetFilterTarget(guid, sourceAssetRoot, out string targetAssetPath, out bool targetIsFolder))
+                    continue;
+
+                hasValidTarget = true;
+                if (AssetFilterTargetMatchesAsset(assetPath, targetAssetPath, targetIsFolder))
+                {
+                    noOp = false;
+                    return true;
+                }
+            }
+
+            noOp = !hasValidTarget;
+            return !hasValidTarget;
         }
 
         private static bool TryResolveAssetFilterTarget(
