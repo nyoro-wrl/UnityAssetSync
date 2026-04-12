@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-04-12
+
+### Added
+
+- Added `Extension` filter target in the `Filters` UI (`Type` / `Asset` / `Extension`).
+- Added extension-based include/exclude evaluation to sync logic.
+- Added extension filter tests for both condition evaluation and sync integration.
+
+### Changed
+
+- Updated package metadata description to reflect support for type, asset, and extension filters.
+- Updated documentation and README filter descriptions to include extension filtering.
+
 ## [1.3.0] - 2026-04-05
 
 ### Changed

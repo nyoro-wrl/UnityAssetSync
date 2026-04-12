@@ -15,6 +15,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
 
         private string _txtAssetPath;
         private string _nestedAssetPath;
+        private string _jsonAssetPath;
         private string _outsideAssetPath;
 
         [SetUp]
@@ -26,10 +27,12 @@ namespace Nyorowrl.AssetSync.Editor.Tests
 
             _txtAssetPath = TestDir + "/test.txt";
             _nestedAssetPath = TestDir + "/Sub/nested.txt";
+            _jsonAssetPath = TestDir + "/data.JSON";
             _outsideAssetPath = OtherDir + "/outside.txt";
 
             File.WriteAllText(_txtAssetPath, "hello");
             File.WriteAllText(_nestedAssetPath, "hello nested");
+            File.WriteAllText(_jsonAssetPath, "{ \"hello\": true }");
             File.WriteAllText(_outsideAssetPath, "outside");
             AssetDatabase.Refresh();
         }
@@ -153,6 +156,67 @@ namespace Nyorowrl.AssetSync.Editor.Tests
         {
             var f = new FilterCondition { multipleTypeNames = new List<string> { typeof(Texture2D).AssemblyQualifiedName }, invert = true };
             Assert.IsTrue(AssetSyncer.EvaluateCondition(f, _txtAssetPath));
+        }
+
+        [Test]
+        public void ExtensionList_SingleEntry_MatchingWithDot_ReturnsTrue()
+        {
+            var f = new FilterCondition
+            {
+                targetKind = FilterConditionTargetKind.Extension,
+                multipleExtensions = new List<string> { ".json" }
+            };
+
+            Assert.IsTrue(AssetSyncer.EvaluateCondition(f, _jsonAssetPath));
+        }
+
+        [Test]
+        public void ExtensionList_SingleEntry_MatchingWithoutDot_ReturnsTrue()
+        {
+            var f = new FilterCondition
+            {
+                targetKind = FilterConditionTargetKind.Extension,
+                multipleExtensions = new List<string> { "json" }
+            };
+
+            Assert.IsTrue(AssetSyncer.EvaluateCondition(f, _jsonAssetPath));
+        }
+
+        [Test]
+        public void ExtensionList_SingleEntry_NonMatching_ReturnsFalse()
+        {
+            var f = new FilterCondition
+            {
+                targetKind = FilterConditionTargetKind.Extension,
+                multipleExtensions = new List<string> { ".png" }
+            };
+
+            Assert.IsFalse(AssetSyncer.EvaluateCondition(f, _jsonAssetPath));
+        }
+
+        [Test]
+        public void ExtensionList_SingleEntry_InvertNonMatching_ReturnsTrue()
+        {
+            var f = new FilterCondition
+            {
+                targetKind = FilterConditionTargetKind.Extension,
+                invert = true,
+                multipleExtensions = new List<string> { ".png" }
+            };
+
+            Assert.IsTrue(AssetSyncer.EvaluateCondition(f, _jsonAssetPath));
+        }
+
+        [Test]
+        public void ExtensionList_EmptyEntry_ReturnsTrue()
+        {
+            var f = new FilterCondition
+            {
+                targetKind = FilterConditionTargetKind.Extension,
+                multipleExtensions = new List<string> { string.Empty }
+            };
+
+            Assert.IsTrue(AssetSyncer.EvaluateCondition(f, _jsonAssetPath));
         }
 
         [Test]

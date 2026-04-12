@@ -26,7 +26,8 @@ Install this package with the Unity Package Manager.
    - `Action = Exclude`: exclude matching targets.
    - `Target = Type`: select Unity object types.
    - `Target = Asset`: select source assets/folders.
-   - `Type` filters support single/list value mode switching.
+   - `Target = Extension`: select file extensions (for example: `.png`, `png`, `.asset`).
+   - Filters support single/list value mode switching.
 8. Optionally add assets to `Ignore`:
    - destination ignored entries are never copied/updated/deleted by sync.
 9. If a destination file already exists as unsynced, resolve it in the conflict dialog with `Overwrite` or `Keep`.
@@ -38,7 +39,7 @@ Install this package with the Unity Package Manager.
 - Never copies `.meta` files from source.
 - Tracks synchronized files per config in `SyncConfig.syncRelativePaths` (saved in settings assets).
 - Supports manual `Ignore` entries (GUID-based): destination ignored files/folders are never copied/updated/deleted.
-- Supports filter target kinds `Type` and `Asset`; asset target folders apply recursively to all descendants.
+- Supports filter target kinds `Type`, `Asset`, and `Extension`; asset target folders apply recursively to all descendants.
 - If a destination file already exists and is neither sync nor ignored, AssetSync opens a conflict dialog to choose `Overwrite` or `Keep`.
 - Disabling a config removes destination files tracked as sync, while preserving manual files and ignored destination entries.
 - Synced destination assets are shown with an icon badge in the Project window (excluded for ignored entries or disabled configs).

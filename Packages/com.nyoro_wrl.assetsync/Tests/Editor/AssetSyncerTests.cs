@@ -1113,6 +1113,45 @@ namespace Nyorowrl.AssetSync.Editor.Tests
         }
 
         [Test]
+        public void Integration_FilterIncludeExtension_OnlyMatchingExtensionCopied()
+        {
+            WriteSrc("a.txt", "A");
+            WriteSrc("b.bytes", "B");
+            AssetDatabase.Refresh();
+
+            var includeByExtension = new FilterCondition
+            {
+                targetKind = FilterConditionTargetKind.Extension,
+                multipleExtensions = new List<string> { "txt" }
+            };
+
+            AssetSyncer.SyncConfig(MakeConfig(new List<FilterCondition> { includeByExtension }));
+
+            Assert.IsTrue(DstExists("a.txt"));
+            Assert.IsFalse(DstExists("b.bytes"));
+        }
+
+        [Test]
+        public void Integration_FilterExcludeExtension_MatchingExtensionExcluded()
+        {
+            WriteSrc("a.txt", "A");
+            WriteSrc("b.bytes", "B");
+            AssetDatabase.Refresh();
+
+            var excludeByExtension = new FilterCondition
+            {
+                targetKind = FilterConditionTargetKind.Extension,
+                invert = true,
+                multipleExtensions = new List<string> { ".txt" }
+            };
+
+            AssetSyncer.SyncConfig(MakeConfig(new List<FilterCondition> { excludeByExtension }));
+
+            Assert.IsFalse(DstExists("a.txt"));
+            Assert.IsTrue(DstExists("b.bytes"));
+        }
+
+        [Test]
         public void Integration_FilterIncludeAsset_OnlySelectedAssetCopied()
         {
             WriteSrc("a.txt", "A");

@@ -1269,19 +1269,39 @@ namespace Nyorowrl.AssetSync.Editor
                 return true;
 
             bool matched;
-            if (condition.targetKind == FilterConditionTargetKind.Asset)
+            bool noOp;
+            switch (condition.targetKind)
             {
-                matched = EvaluateAssetCondition(condition, assetPath, sourceAssetRoot, out bool noOp);
-                if (noOp)
-                    return true;
-                return condition.invert ? !matched : matched;
+                case FilterConditionTargetKind.Asset:
+                    matched = EvaluateAssetCondition(condition, assetPath, sourceAssetRoot, out noOp);
+                    break;
+                case FilterConditionTargetKind.Extension:
+                    matched = EvaluateExtensionCondition(condition, assetPath, out noOp);
+                    break;
+                default:
+                    matched = EvaluateTypeCondition(condition, assetPath, out noOp);
+                    break;
             }
 
-            if (condition.multipleTypeNames == null || condition.multipleTypeNames.Count == 0)
+            if (noOp)
                 return true;
 
+            return condition.invert ? !matched : matched;
+        }
+
+        private static bool EvaluateTypeCondition(
+            FilterCondition condition,
+            string assetPath,
+            out bool noOp)
+        {
+            if (condition.multipleTypeNames == null || condition.multipleTypeNames.Count == 0)
+            {
+                noOp = true;
+                return true;
+            }
+
             bool hasTypeFilter = false;
-            matched = false;
+            bool matched = false;
             foreach (string typeName in condition.multipleTypeNames)
             {
                 if (string.IsNullOrWhiteSpace(typeName))
@@ -1296,9 +1316,13 @@ namespace Nyorowrl.AssetSync.Editor
             }
 
             if (!hasTypeFilter)
+            {
+                noOp = true;
                 return true;
+            }
 
-            return condition.invert ? !matched : matched;
+            noOp = false;
+            return matched;
         }
 
         private static bool EvaluateAssetCondition(
@@ -1329,6 +1353,38 @@ namespace Nyorowrl.AssetSync.Editor
 
             noOp = !hasValidTarget;
             return !hasValidTarget;
+        }
+
+        private static bool EvaluateExtensionCondition(
+            FilterCondition condition,
+            string assetPath,
+            out bool noOp)
+        {
+            if (condition.multipleExtensions == null || condition.multipleExtensions.Count == 0)
+            {
+                noOp = true;
+                return true;
+            }
+
+            string assetExtension = NormalizeExtensionToken(Path.GetExtension(assetPath));
+            bool hasExtensionFilter = false;
+
+            foreach (string extension in condition.multipleExtensions)
+            {
+                string normalizedExtension = NormalizeExtensionToken(extension);
+                if (string.IsNullOrEmpty(normalizedExtension))
+                    continue;
+
+                hasExtensionFilter = true;
+                if (string.Equals(assetExtension, normalizedExtension, StringComparison.OrdinalIgnoreCase))
+                {
+                    noOp = false;
+                    return true;
+                }
+            }
+
+            noOp = !hasExtensionFilter;
+            return !hasExtensionFilter;
         }
 
         private static bool TryResolveAssetFilterTarget(
@@ -1374,6 +1430,30 @@ namespace Nyorowrl.AssetSync.Editor
 
             UnityEngine.Object asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(assetPath);
             return asset != null && type.IsAssignableFrom(asset.GetType());
+        }
+
+        private static string NormalizeExtensionToken(string extension)
+        {
+            if (string.IsNullOrWhiteSpace(extension))
+                return string.Empty;
+
+            string normalized = extension.Trim();
+            if (normalized.StartsWith("*.", StringComparison.Ordinal))
+                normalized = normalized.Substring(1);
+            else if (normalized.StartsWith("*", StringComparison.Ordinal))
+                normalized = normalized.Substring(1);
+
+            if (string.IsNullOrWhiteSpace(normalized))
+                return string.Empty;
+
+            normalized = normalized.Trim();
+            if (!normalized.StartsWith(".", StringComparison.Ordinal))
+                normalized = "." + normalized;
+
+            if (normalized == ".")
+                return string.Empty;
+
+            return normalized.ToLowerInvariant();
         }
 
         private static bool IsDirectoryEmpty(string directoryPath)

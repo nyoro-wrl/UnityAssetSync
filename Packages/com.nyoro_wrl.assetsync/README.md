@@ -13,7 +13,7 @@ AssetSync is an editor-only Unity package for synchronizing assets between folde
 - Mark destination assets to ignore manually with a GUID-based `Ignore` list (`ignoreGuids`).
 - Resolve destination collisions with a conflict dialog (`Overwrite` or `Keep`).
 - Show synced destination assets with an icon badge in the Project window.
-- Filter synchronized assets by `Type` or `Asset` targets (single or multiple, include/exclude) with single/list mode switching.
+- Filter synchronized assets by `Type`, `Asset`, or `Extension` targets (single or multiple, include/exclude) with single/list mode switching.
 
 ## Usage
 
@@ -29,7 +29,8 @@ AssetSync is an editor-only Unity package for synchronizing assets between folde
 6. Optionally add filters.
    - `Type` target: include/exclude by Unity object type.
    - `Asset` target: include/exclude by specific source assets or source folders.
-   - Toggle between single and list value modes for type targets.
+   - `Extension` target: include/exclude by file extension (for example: `.png`, `png`, `.asset`).
+   - Toggle between single and list value modes for each filter target.
 7. Optionally add `Ignore` entries.
    - Ignore destination assets/folders are never copied/updated/deleted by sync.
 8. If a destination file already exists as unsynced, resolve it in the conflict dialog (`Overwrite` or `Keep`).

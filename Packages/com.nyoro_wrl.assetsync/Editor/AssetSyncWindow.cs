@@ -377,6 +377,7 @@ namespace Nyorowrl.AssetSync.Editor
                 var menu = new GenericMenu();
                 menu.AddItem(new GUIContent("Type"), false, () => AddFilter(config, FilterConditionTargetKind.Type));
                 menu.AddItem(new GUIContent("Asset"), false, () => AddFilter(config, FilterConditionTargetKind.Asset));
+                menu.AddItem(new GUIContent("Extension"), false, () => AddFilter(config, FilterConditionTargetKind.Extension));
                 menu.ShowAsContext();
             };
 
@@ -467,6 +468,8 @@ namespace Nyorowrl.AssetSync.Editor
             y += lineHeight + rowSpacing;
             if (filter.targetKind == FilterConditionTargetKind.Asset)
                 DrawAssetField(contentRect.x, ref y, labelWidth, fieldWidth, lineHeight, rowSpacing, filter, config);
+            else if (filter.targetKind == FilterConditionTargetKind.Extension)
+                DrawExtensionField(contentRect.x, ref y, labelWidth, fieldWidth, lineHeight, rowSpacing, filter, config);
             else
                 DrawTypeField(contentRect.x, ref y, labelWidth, fieldWidth, lineHeight, rowSpacing, filter, config);
         }
@@ -484,6 +487,8 @@ namespace Nyorowrl.AssetSync.Editor
             EnsureFilterCollections(filter);
             if (targetKind == FilterConditionTargetKind.Asset)
                 filter.multipleAssetGuids.Add(string.Empty);
+            else if (targetKind == FilterConditionTargetKind.Extension)
+                filter.multipleExtensions.Add(string.Empty);
             else
                 filter.multipleTypeNames.Add(string.Empty);
 
@@ -617,6 +622,69 @@ namespace Nyorowrl.AssetSync.Editor
             }
         }
 
+        private void DrawExtensionField(float x, ref float y, float labelWidth, float fieldWidth, float lineHeight,
+            float rowSpacing, FilterCondition filter, SyncConfig config)
+        {
+            const float spacing = 2f;
+            EnsureFilterListMode(filter);
+            float fieldX = x + labelWidth;
+            const float listSizeButtonWidth = 25f;
+            float buttonWidth = Mathf.Round(listSizeButtonWidth);
+            for (int i = 0; i < filter.multipleExtensions.Count; i++)
+            {
+                var elementLabelRect = new Rect(x, y, labelWidth, lineHeight);
+                var elementAddRect = new Rect(
+                    fieldX + Mathf.Max(0f, fieldWidth - (buttonWidth * 2f)),
+                    y,
+                    buttonWidth,
+                    lineHeight);
+                var elementRemoveRect = new Rect(
+                    fieldX + Mathf.Max(0f, fieldWidth - buttonWidth),
+                    y,
+                    buttonWidth,
+                    lineHeight);
+                var elementFieldRect = new Rect(
+                    fieldX,
+                    y,
+                    Mathf.Max(0f, fieldWidth - (buttonWidth * 2f) - (spacing * 2f)),
+                    lineHeight);
+                EditorGUI.LabelField(elementLabelRect, i == 0 ? "Extension" : string.Empty);
+
+                int captured = i;
+                EditorGUI.BeginChangeCheck();
+                string currentValue = filter.multipleExtensions[captured] ?? string.Empty;
+                string nextValue = EditorGUI.DelayedTextField(elementFieldRect, currentValue);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    Undo.RecordObject(_settings, "Change Extension");
+                    filter.multipleExtensions[captured] = nextValue;
+                    ApplyConfigChange(config);
+                }
+
+                if (GUI.Button(elementAddRect, "+", EditorStyles.miniButton))
+                {
+                    Undo.RecordObject(_settings, "Add Extension");
+                    filter.multipleExtensions.Insert(captured + 1, string.Empty);
+                    ApplyConfigChange(config);
+                    break;
+                }
+
+                using (new EditorGUI.DisabledScope(filter.multipleExtensions.Count <= 1))
+                {
+                    if (GUI.Button(elementRemoveRect, "-", EditorStyles.miniButton))
+                    {
+                        Undo.RecordObject(_settings, "Remove Extension");
+                        filter.multipleExtensions.RemoveAt(captured);
+                        ApplyConfigChange(config);
+                        break;
+                    }
+                }
+
+                if (i < filter.multipleExtensions.Count - 1)
+                    y += lineHeight + rowSpacing;
+            }
+        }
+
         private void DrawAssetFieldControl(
             Rect rect,
             string guid,
@@ -663,6 +731,14 @@ namespace Nyorowrl.AssetSync.Editor
                     changed = true;
                 }
             }
+            else if (filter.targetKind == FilterConditionTargetKind.Extension)
+            {
+                if (filter.multipleExtensions.Count == 0)
+                {
+                    filter.multipleExtensions.Add(string.Empty);
+                    changed = true;
+                }
+            }
             else
             {
                 if (filter.multipleTypeNames.Count == 0)
@@ -680,9 +756,14 @@ namespace Nyorowrl.AssetSync.Editor
 
         private static int GetFilterListElementCountForUi(FilterCondition filter)
         {
-            int count = filter.targetKind == FilterConditionTargetKind.Asset
-                ? filter.multipleAssetGuids.Count
-                : filter.multipleTypeNames.Count;
+            int count;
+            if (filter.targetKind == FilterConditionTargetKind.Asset)
+                count = filter.multipleAssetGuids.Count;
+            else if (filter.targetKind == FilterConditionTargetKind.Extension)
+                count = filter.multipleExtensions.Count;
+            else
+                count = filter.multipleTypeNames.Count;
+
             return Mathf.Max(1, count);
         }
 
@@ -690,6 +771,7 @@ namespace Nyorowrl.AssetSync.Editor
         {
             filter.multipleTypeNames ??= new List<string>();
             filter.multipleAssetGuids ??= new List<string>();
+            filter.multipleExtensions ??= new List<string>();
         }
 
         private void DrawIgnoreList(SyncConfig config)
