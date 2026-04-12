@@ -14,6 +14,8 @@ Install this package with the Unity Package Manager.
 2. Create a new `AssetSyncSettings` asset with the `New` button, or select an existing one.
 3. Add a config from the left panel.
 4. Set `Source` and `Destination` folders.
+   - `Source` accepts either a project folder path (for example: `Assets/Shared`) or an external absolute directory path.
+   - Use the `Browse` button on `Source` to select any directory. Paths under the project that are valid Unity folders are stored as project asset paths.
 5. Click `Sync` (bottom-right) to run the initial activation sync.
    - The button is enabled only when `Source` and `Destination` are valid folders.
    - After activation, the `Enable` toggle is shown for that config.
@@ -21,16 +23,23 @@ Install this package with the Unity Package Manager.
    - default: `off`
    - `on`: synchronize files under nested folders.
    - `off`: synchronize only files directly under `Source`.
-7. Enable filters if needed:
+7. Set `Keep Empty Directories` (optional):
+   - default: `off`
+   - `on`: keep empty source directory structure in destination.
+   - `off`: create only directories required for synchronized files.
+8. Enable filters if needed:
    - `Action = Include`: include matching targets.
    - `Action = Exclude`: exclude matching targets.
    - `Target = Type`: select Unity object types.
    - `Target = Asset`: select source assets/folders.
-   - `Type` filters support single/list value mode switching.
-8. Optionally add assets to `Ignore`:
+   - `Target = Extension`: select file extensions (for example: `.png`, `png`, `.asset`).
+   - Filters support single/list value mode switching.
+9. Optionally add assets to `Ignore`:
    - destination ignored entries are never copied/updated/deleted by sync.
-9. If a destination file already exists as unsynced, resolve it in the conflict dialog with `Overwrite` or `Keep`.
-10. Edit assets in the source folder. AssetSync re-syncs automatically.
+10. If a destination file already exists as unsynced, resolve it in the conflict dialog with `Overwrite` or `Keep`.
+11. Edit assets in the source folder.
+   - For project source folders, AssetSync re-syncs automatically.
+   - For external source folders, synchronization runs when AssetSync executes (for example, on activation/config updates).
 
 ## Sync behavior
 
@@ -38,7 +47,9 @@ Install this package with the Unity Package Manager.
 - Never copies `.meta` files from source.
 - Tracks synchronized files per config in `SyncConfig.syncRelativePaths` (saved in settings assets).
 - Supports manual `Ignore` entries (GUID-based): destination ignored files/folders are never copied/updated/deleted.
-- Supports filter target kinds `Type` and `Asset`; asset target folders apply recursively to all descendants.
+- Supports filter target kinds `Type`, `Asset`, and `Extension`; asset target folders apply recursively to all descendants.
+- Empty directory sync is controlled by `Keep Empty Directories` (`off` by default).
+- When `Source` is an external directory, only `Extension` filters are supported (`Type` and `Asset` filters are rejected with a warning).
 - If a destination file already exists and is neither sync nor ignored, AssetSync opens a conflict dialog to choose `Overwrite` or `Keep`.
 - Disabling a config removes destination files tracked as sync, while preserving manual files and ignored destination entries.
 - Synced destination assets are shown with an icon badge in the Project window (excluded for ignored entries or disabled configs).

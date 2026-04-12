@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System;
+using System.IO;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEditorInternal;
@@ -36,6 +37,8 @@ namespace Nyorowrl.AssetSync.Editor
             new Dictionary<SyncConfig, ReorderableList>();
         private readonly Dictionary<SyncConfig, ReorderableList> _ignoreLists =
             new Dictionary<SyncConfig, ReorderableList>();
+        private readonly Dictionary<SyncConfig, SourceInputMode> _sourceInputModes =
+            new Dictionary<SyncConfig, SourceInputMode>();
 
         private int SelectedConfigIndex => _configTreeView?.SelectedIndex ?? -1;
 
@@ -115,6 +118,7 @@ namespace Nyorowrl.AssetSync.Editor
                 {
                     _filterLists.Clear();
                     _ignoreLists.Clear();
+                    _sourceInputModes.Clear();
                     string path = _settings != null ? AssetDatabase.GetAssetPath(_settings) : "";
                     EditorPrefs.SetString(SettingsPathPrefKey, path);
                     RebuildTreeView();
@@ -137,6 +141,7 @@ namespace Nyorowrl.AssetSync.Editor
                         _settings = newSettings;
                         _filterLists.Clear();
                         _ignoreLists.Clear();
+                        _sourceInputModes.Clear();
                         EditorPrefs.SetString(SettingsPathPrefKey, path);
                         RebuildTreeView();
                         RestoreOrInitializeConfigSelection();
@@ -251,33 +256,13 @@ namespace Nyorowrl.AssetSync.Editor
                     using (new EditorGUI.DisabledScope(sourceDestinationReadOnly))
                     {
                         bool sourceIsValid = IsFolderSelectionValid(config.sourcePath);
-                        bool destinationIsValid = IsFolderSelectionValid(config.destinationPath);
+                        bool destinationIsValid = IsDestinationFolderSelectionValid(config.destinationPath);
 
-                        var srcObj = string.IsNullOrEmpty(config.sourcePath)
-                            ? null : AssetDatabase.LoadAssetAtPath<DefaultAsset>(config.sourcePath);
-                        Color previousBackgroundColor = GUI.backgroundColor;
-                        if (!sourceIsValid)
-                            GUI.backgroundColor = Color.red;
-                        var newSrcObj = (DefaultAsset)EditorGUILayout.ObjectField("Source", srcObj, typeof(DefaultAsset), false);
-                        GUI.backgroundColor = previousBackgroundColor;
-                        if (newSrcObj != srcObj)
-                        {
-                            string selectedPath = AssetDatabase.GetAssetPath(newSrcObj);
-                            if (!string.IsNullOrEmpty(selectedPath) && !AssetDatabase.IsValidFolder(selectedPath))
-                            {
-                                Debug.LogWarning("[AssetSync] Source must be a folder.");
-                            }
-                            else
-                            {
-                                Undo.RecordObject(_settings, "Set Source");
-                                config.sourcePath = selectedPath;
-                                ApplyConfigChange(config);
-                            }
-                        }
+                        DrawSourcePathField(config, sourceIsValid);
 
                         var dstObj = string.IsNullOrEmpty(config.destinationPath)
                             ? null : AssetDatabase.LoadAssetAtPath<DefaultAsset>(config.destinationPath);
-                        previousBackgroundColor = GUI.backgroundColor;
+                        Color previousBackgroundColor = GUI.backgroundColor;
                         if (!destinationIsValid)
                             GUI.backgroundColor = Color.red;
                         var newDstObj = (DefaultAsset)EditorGUILayout.ObjectField("Destination", dstObj, typeof(DefaultAsset), false);
@@ -304,6 +289,15 @@ namespace Nyorowrl.AssetSync.Editor
                     {
                         Undo.RecordObject(_settings, "Toggle Include Subdirectories");
                         config.includeSubdirectories = newIncludeSubdirectories;
+                        ApplyConfigChange(config);
+                    }
+
+                    EditorGUI.BeginChangeCheck();
+                    bool newKeepEmptyDirectories = EditorGUILayout.Toggle("Keep Empty Directories", config.keepEmptyDirectories);
+                    if (EditorGUI.EndChangeCheck())
+                    {
+                        Undo.RecordObject(_settings, "Toggle Keep Empty Directories");
+                        config.keepEmptyDirectories = newKeepEmptyDirectories;
                         ApplyConfigChange(config);
                     }
 
@@ -377,6 +371,7 @@ namespace Nyorowrl.AssetSync.Editor
                 var menu = new GenericMenu();
                 menu.AddItem(new GUIContent("Type"), false, () => AddFilter(config, FilterConditionTargetKind.Type));
                 menu.AddItem(new GUIContent("Asset"), false, () => AddFilter(config, FilterConditionTargetKind.Asset));
+                menu.AddItem(new GUIContent("Extension"), false, () => AddFilter(config, FilterConditionTargetKind.Extension));
                 menu.ShowAsContext();
             };
 
@@ -467,6 +462,8 @@ namespace Nyorowrl.AssetSync.Editor
             y += lineHeight + rowSpacing;
             if (filter.targetKind == FilterConditionTargetKind.Asset)
                 DrawAssetField(contentRect.x, ref y, labelWidth, fieldWidth, lineHeight, rowSpacing, filter, config);
+            else if (filter.targetKind == FilterConditionTargetKind.Extension)
+                DrawExtensionField(contentRect.x, ref y, labelWidth, fieldWidth, lineHeight, rowSpacing, filter, config);
             else
                 DrawTypeField(contentRect.x, ref y, labelWidth, fieldWidth, lineHeight, rowSpacing, filter, config);
         }
@@ -484,6 +481,8 @@ namespace Nyorowrl.AssetSync.Editor
             EnsureFilterCollections(filter);
             if (targetKind == FilterConditionTargetKind.Asset)
                 filter.multipleAssetGuids.Add(string.Empty);
+            else if (targetKind == FilterConditionTargetKind.Extension)
+                filter.multipleExtensions.Add(string.Empty);
             else
                 filter.multipleTypeNames.Add(string.Empty);
 
@@ -617,6 +616,69 @@ namespace Nyorowrl.AssetSync.Editor
             }
         }
 
+        private void DrawExtensionField(float x, ref float y, float labelWidth, float fieldWidth, float lineHeight,
+            float rowSpacing, FilterCondition filter, SyncConfig config)
+        {
+            const float spacing = 2f;
+            EnsureFilterListMode(filter);
+            float fieldX = x + labelWidth;
+            const float listSizeButtonWidth = 25f;
+            float buttonWidth = Mathf.Round(listSizeButtonWidth);
+            for (int i = 0; i < filter.multipleExtensions.Count; i++)
+            {
+                var elementLabelRect = new Rect(x, y, labelWidth, lineHeight);
+                var elementAddRect = new Rect(
+                    fieldX + Mathf.Max(0f, fieldWidth - (buttonWidth * 2f)),
+                    y,
+                    buttonWidth,
+                    lineHeight);
+                var elementRemoveRect = new Rect(
+                    fieldX + Mathf.Max(0f, fieldWidth - buttonWidth),
+                    y,
+                    buttonWidth,
+                    lineHeight);
+                var elementFieldRect = new Rect(
+                    fieldX,
+                    y,
+                    Mathf.Max(0f, fieldWidth - (buttonWidth * 2f) - (spacing * 2f)),
+                    lineHeight);
+                EditorGUI.LabelField(elementLabelRect, i == 0 ? "Extension" : string.Empty);
+
+                int captured = i;
+                EditorGUI.BeginChangeCheck();
+                string currentValue = filter.multipleExtensions[captured] ?? string.Empty;
+                string nextValue = EditorGUI.DelayedTextField(elementFieldRect, currentValue);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    Undo.RecordObject(_settings, "Change Extension");
+                    filter.multipleExtensions[captured] = nextValue;
+                    ApplyConfigChange(config);
+                }
+
+                if (GUI.Button(elementAddRect, "+", EditorStyles.miniButton))
+                {
+                    Undo.RecordObject(_settings, "Add Extension");
+                    filter.multipleExtensions.Insert(captured + 1, string.Empty);
+                    ApplyConfigChange(config);
+                    break;
+                }
+
+                using (new EditorGUI.DisabledScope(filter.multipleExtensions.Count <= 1))
+                {
+                    if (GUI.Button(elementRemoveRect, "-", EditorStyles.miniButton))
+                    {
+                        Undo.RecordObject(_settings, "Remove Extension");
+                        filter.multipleExtensions.RemoveAt(captured);
+                        ApplyConfigChange(config);
+                        break;
+                    }
+                }
+
+                if (i < filter.multipleExtensions.Count - 1)
+                    y += lineHeight + rowSpacing;
+            }
+        }
+
         private void DrawAssetFieldControl(
             Rect rect,
             string guid,
@@ -663,6 +725,14 @@ namespace Nyorowrl.AssetSync.Editor
                     changed = true;
                 }
             }
+            else if (filter.targetKind == FilterConditionTargetKind.Extension)
+            {
+                if (filter.multipleExtensions.Count == 0)
+                {
+                    filter.multipleExtensions.Add(string.Empty);
+                    changed = true;
+                }
+            }
             else
             {
                 if (filter.multipleTypeNames.Count == 0)
@@ -680,9 +750,14 @@ namespace Nyorowrl.AssetSync.Editor
 
         private static int GetFilterListElementCountForUi(FilterCondition filter)
         {
-            int count = filter.targetKind == FilterConditionTargetKind.Asset
-                ? filter.multipleAssetGuids.Count
-                : filter.multipleTypeNames.Count;
+            int count;
+            if (filter.targetKind == FilterConditionTargetKind.Asset)
+                count = filter.multipleAssetGuids.Count;
+            else if (filter.targetKind == FilterConditionTargetKind.Extension)
+                count = filter.multipleExtensions.Count;
+            else
+                count = filter.multipleTypeNames.Count;
+
             return Mathf.Max(1, count);
         }
 
@@ -690,6 +765,7 @@ namespace Nyorowrl.AssetSync.Editor
         {
             filter.multipleTypeNames ??= new List<string>();
             filter.multipleAssetGuids ??= new List<string>();
+            filter.multipleExtensions ??= new List<string>();
         }
 
         private void DrawIgnoreList(SyncConfig config)
@@ -854,7 +930,15 @@ namespace Nyorowrl.AssetSync.Editor
 
         private static Texture GetPreviewIcon(string sourceAssetPath, string destinationAssetPath)
         {
-            Texture icon = GetAssetIcon(sourceAssetPath);
+            Texture icon = GetKnownPreviewIconFromPath(sourceAssetPath);
+            if (icon != null)
+                return icon;
+
+            icon = GetKnownPreviewIconFromPath(destinationAssetPath);
+            if (icon != null)
+                return icon;
+
+            icon = GetAssetIcon(sourceAssetPath);
             if (icon != null)
                 return icon;
 
@@ -868,9 +952,12 @@ namespace Nyorowrl.AssetSync.Editor
         private static Texture GetAssetIcon(string assetPath)
         {
             if (string.IsNullOrEmpty(assetPath))
-                return EditorGUIUtility.IconContent("DefaultAsset Icon")?.image;
+                return null;
 
-            var asset = AssetDatabase.LoadMainAssetAtPath(assetPath);
+            if (!TryGetAssetDatabasePath(assetPath, out string assetDatabasePath))
+                return null;
+
+            var asset = AssetDatabase.LoadMainAssetAtPath(assetDatabasePath);
             Texture icon = null;
             if (asset != null)
             {
@@ -879,8 +966,130 @@ namespace Nyorowrl.AssetSync.Editor
                     icon = EditorGUIUtility.ObjectContent(asset, asset.GetType()).image;
             }
 
-            icon ??= AssetDatabase.GetCachedIcon(assetPath);
+            icon ??= AssetDatabase.GetCachedIcon(assetDatabasePath);
             return icon;
+        }
+
+        private static Texture GetKnownPreviewIconFromPath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return null;
+
+            if (IsDirectoryPath(path))
+                return GetEditorIcon("Folder Icon", "FolderEmpty Icon", "DefaultAsset Icon");
+
+            string extension = GetNormalizedPathExtension(path);
+            if (string.IsNullOrEmpty(extension))
+                return null;
+
+            switch (extension)
+            {
+                case ".cs":
+                    return GetEditorIcon("cs Script Icon", "Script Icon", "TextAsset Icon");
+                case ".js":
+                    return GetEditorIcon("js Script Icon", "Script Icon", "TextAsset Icon");
+                case ".shader":
+                    return GetEditorIcon("Shader Icon", "TextAsset Icon");
+                case ".mat":
+                    return GetEditorIcon("Material Icon");
+                case ".prefab":
+                    return GetEditorIcon("Prefab Icon");
+                case ".unity":
+                    return GetEditorIcon("SceneAsset Icon");
+                case ".anim":
+                    return GetEditorIcon("AnimationClip Icon");
+                case ".controller":
+                    return GetEditorIcon("AnimatorController Icon");
+                case ".txt":
+                case ".md":
+                case ".json":
+                case ".xml":
+                case ".csv":
+                case ".bytes":
+                case ".yaml":
+                case ".yml":
+                    return GetEditorIcon("TextAsset Icon");
+                case ".png":
+                case ".jpg":
+                case ".jpeg":
+                case ".tga":
+                case ".psd":
+                case ".gif":
+                case ".bmp":
+                case ".tif":
+                case ".tiff":
+                case ".exr":
+                    return GetEditorIcon("Texture Icon");
+                case ".wav":
+                case ".mp3":
+                case ".ogg":
+                case ".aif":
+                case ".aiff":
+                    return GetEditorIcon("AudioClip Icon");
+                default:
+                    return null;
+            }
+        }
+
+        private static Texture GetEditorIcon(params string[] iconNames)
+        {
+            if (iconNames == null)
+                return null;
+
+            foreach (string iconName in iconNames)
+            {
+                if (string.IsNullOrWhiteSpace(iconName))
+                    continue;
+
+                Texture icon = EditorGUIUtility.IconContent(iconName)?.image;
+                if (icon != null)
+                    return icon;
+            }
+
+            return null;
+        }
+
+        private static bool IsDirectoryPath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return false;
+
+            string normalizedPath = path.Replace('\\', '/');
+            if (!Path.IsPathRooted(path))
+            {
+                if (AssetDatabase.IsValidFolder(normalizedPath))
+                    return true;
+                if (normalizedPath.EndsWith("/", StringComparison.Ordinal))
+                    return true;
+                return false;
+            }
+
+            try
+            {
+                string fullPath = Path.GetFullPath(path);
+                if (Directory.Exists(fullPath))
+                    return true;
+                if (File.Exists(fullPath))
+                    return false;
+                return path.EndsWith(Path.DirectorySeparatorChar.ToString(), StringComparison.Ordinal)
+                    || path.EndsWith(Path.AltDirectorySeparatorChar.ToString(), StringComparison.Ordinal);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static string GetNormalizedPathExtension(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return string.Empty;
+
+            string normalizedPath = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            string extension = Path.GetExtension(normalizedPath);
+            return string.IsNullOrEmpty(extension)
+                ? string.Empty
+                : extension.ToLowerInvariant();
         }
 
         private static string GetPreviewEntryKey(AssetSyncer.PreviewCopyEntry entry)
@@ -906,15 +1115,71 @@ namespace Nyorowrl.AssetSync.Editor
                 ? previewEntry.SourceAssetPath
                 : previewEntry.DestinationAssetPath;
 
-            var asset = AssetDatabase.LoadMainAssetAtPath(primaryPath);
+            var asset = LoadAssetForProjectWindow(primaryPath);
             if (asset == null)
-                asset = AssetDatabase.LoadMainAssetAtPath(secondaryPath);
+                asset = LoadAssetForProjectWindow(secondaryPath);
             if (asset == null)
                 return;
 
             Selection.activeObject = asset;
             EditorGUIUtility.PingObject(asset);
             EditorUtility.FocusProjectWindow();
+        }
+
+        private static UnityEngine.Object LoadAssetForProjectWindow(string path)
+        {
+            if (!TryGetAssetDatabasePath(path, out string assetDatabasePath))
+                return null;
+
+            return AssetDatabase.LoadMainAssetAtPath(assetDatabasePath);
+        }
+
+        private static bool TryGetAssetDatabasePath(string path, out string assetDatabasePath)
+        {
+            assetDatabasePath = string.Empty;
+            if (string.IsNullOrWhiteSpace(path))
+                return false;
+
+            if (!Path.IsPathRooted(path))
+            {
+                assetDatabasePath = path.Replace('\\', '/');
+                return true;
+            }
+
+            try
+            {
+                string normalizedPath = NormalizeFullPathForAssetDatabase(path);
+                string projectRoot = NormalizeFullPathForAssetDatabase(Path.GetDirectoryName(Application.dataPath));
+                if (!IsSubPathOrSame(projectRoot, normalizedPath))
+                    return false;
+
+                string relativePath = normalizedPath.Substring(projectRoot.Length)
+                    .TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                if (string.IsNullOrEmpty(relativePath))
+                    return false;
+
+                assetDatabasePath = relativePath.Replace(Path.DirectorySeparatorChar, '/');
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static string NormalizeFullPathForAssetDatabase(string path)
+        {
+            return Path.GetFullPath(path)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        }
+
+        private static bool IsSubPathOrSame(string parentPath, string candidatePath)
+        {
+            if (string.Equals(parentPath, candidatePath, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            string prefix = parentPath + Path.DirectorySeparatorChar;
+            return candidatePath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool CanPreviewCopyTargets(SyncConfig config, out string reason)
@@ -926,7 +1191,7 @@ namespace Nyorowrl.AssetSync.Editor
                 return false;
             }
 
-            if (!IsFolderSelectionValid(config.sourcePath) || !IsFolderSelectionValid(config.destinationPath))
+            if (!IsFolderSelectionValid(config.sourcePath) || !IsDestinationFolderSelectionValid(config.destinationPath))
             {
                 reason = "Set valid Source and Destination folders to show preview.";
                 return false;
@@ -964,6 +1229,7 @@ namespace Nyorowrl.AssetSync.Editor
             EditorUtility.SetDirty(_settings);
             _filterLists.Clear();
             _ignoreLists.Clear();
+            _sourceInputModes.Clear();
 
             _configTreeView.Reload();
             int next = Mathf.Clamp(idx - 1, 0, _settings.syncConfigs.Count - 1);
@@ -1087,7 +1353,7 @@ namespace Nyorowrl.AssetSync.Editor
                 return false;
             if (string.IsNullOrEmpty(config.sourcePath) || string.IsNullOrEmpty(config.destinationPath))
                 return false;
-            if (!AssetDatabase.IsValidFolder(config.sourcePath) || !AssetDatabase.IsValidFolder(config.destinationPath))
+            if (!IsFolderSelectionValid(config.sourcePath) || !IsDestinationFolderSelectionValid(config.destinationPath))
                 return false;
 
             return !TryGetConfigWarningForActivation(config, out _);
@@ -1107,6 +1373,11 @@ namespace Nyorowrl.AssetSync.Editor
         }
 
         private static bool IsFolderSelectionValid(string assetPath)
+        {
+            return AssetSyncer.IsSourceFolderPathValid(assetPath);
+        }
+
+        private static bool IsDestinationFolderSelectionValid(string assetPath)
         {
             return !string.IsNullOrEmpty(assetPath) && AssetDatabase.IsValidFolder(assetPath);
         }
@@ -1132,6 +1403,7 @@ namespace Nyorowrl.AssetSync.Editor
                 configName = config?.configName,
                 enabled = true,
                 includeSubdirectories = config?.includeSubdirectories ?? false,
+                keepEmptyDirectories = config?.keepEmptyDirectories ?? false,
                 sourcePath = config?.sourcePath,
                 destinationPath = config?.destinationPath
             };
@@ -1177,6 +1449,172 @@ namespace Nyorowrl.AssetSync.Editor
             });
         }
 
+        private void DrawSourcePathField(SyncConfig config, bool sourceIsValid)
+        {
+            SourceInputMode currentMode = GetSourceInputMode(config);
+            bool isExternalSource = currentMode == SourceInputMode.External;
+            EditorGUI.BeginChangeCheck();
+            bool nextIsExternalSource = EditorGUILayout.Toggle("External Source", isExternalSource);
+            if (EditorGUI.EndChangeCheck())
+            {
+                SwitchSourceMode(config, nextIsExternalSource ? SourceInputMode.External : SourceInputMode.Internal);
+                isExternalSource = nextIsExternalSource;
+            }
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                EditorGUILayout.PrefixLabel("Source");
+
+                Color previousBackgroundColor = GUI.backgroundColor;
+                if (!sourceIsValid)
+                    GUI.backgroundColor = Color.red;
+
+                if (!isExternalSource)
+                {
+                    var currentSourceObject = string.IsNullOrEmpty(config.sourcePath)
+                        ? null
+                        : AssetDatabase.LoadAssetAtPath<DefaultAsset>(config.sourcePath);
+                    var nextSourceObject = (DefaultAsset)EditorGUILayout.ObjectField(
+                        currentSourceObject,
+                        typeof(DefaultAsset),
+                        false);
+                    if (nextSourceObject != currentSourceObject)
+                    {
+                        string selectedPath = AssetDatabase.GetAssetPath(nextSourceObject);
+                        if (!string.IsNullOrEmpty(selectedPath) && !AssetDatabase.IsValidFolder(selectedPath))
+                        {
+                            Debug.LogWarning("[AssetSync] Source must be a folder.");
+                        }
+                        else
+                        {
+                            SetSourcePath(config, selectedPath);
+                        }
+                    }
+                }
+                else
+                {
+                    EditorGUI.BeginChangeCheck();
+                    string currentSourcePath = config.sourcePath ?? string.Empty;
+                    string changedSourcePath = EditorGUILayout.DelayedTextField(currentSourcePath);
+                    if (EditorGUI.EndChangeCheck())
+                        SetSourcePath(config, NormalizeExternalSourcePathInput(changedSourcePath));
+
+                    GUI.backgroundColor = previousBackgroundColor;
+                    if (GUILayout.Button("Browse", GUILayout.Width(58f)))
+                        BrowseExternalSourceFolder(config);
+                    return;
+                }
+
+                GUI.backgroundColor = previousBackgroundColor;
+            }
+        }
+
+        private void BrowseExternalSourceFolder(SyncConfig config)
+        {
+            string initialPath = GetInitialSourceFolderPickerPath(config?.sourcePath);
+            string selectedPath = EditorUtility.OpenFolderPanel("Select Source Folder", initialPath, string.Empty);
+            if (string.IsNullOrEmpty(selectedPath))
+                return;
+
+            SetSourcePath(config, NormalizeExternalSourcePathInput(selectedPath));
+        }
+
+        private void SetSourcePath(SyncConfig config, string nextSourcePath)
+        {
+            if (_settings == null || config == null)
+                return;
+
+            string normalizedNext = nextSourcePath ?? string.Empty;
+            if (string.Equals(config.sourcePath ?? string.Empty, normalizedNext, StringComparison.Ordinal))
+                return;
+
+            Undo.RecordObject(_settings, "Set Source");
+            config.sourcePath = normalizedNext;
+            ApplyConfigChange(config);
+        }
+
+        private static string NormalizeExternalSourcePathInput(string sourcePathInput)
+        {
+            if (string.IsNullOrWhiteSpace(sourcePathInput))
+                return string.Empty;
+
+            string trimmedPath = sourcePathInput.Trim();
+
+            try
+            {
+                return Path.GetFullPath(trimmedPath);
+            }
+            catch
+            {
+                return trimmedPath;
+            }
+        }
+
+        private void SwitchSourceMode(SyncConfig config, SourceInputMode mode)
+        {
+            if (config == null)
+                return;
+
+            _sourceInputModes[config] = mode;
+            string currentPath = config.sourcePath ?? string.Empty;
+            if (mode == SourceInputMode.External)
+            {
+                if (AssetSyncer.IsProjectAssetFolderPath(currentPath))
+                {
+                    SetSourcePath(config, GetProjectAssetFolderFullPath(currentPath));
+                    return;
+                }
+
+                SetSourcePath(config, NormalizeExternalSourcePathInput(currentPath));
+                return;
+            }
+
+            if (AssetSyncer.TryConvertFullPathToProjectAssetPath(currentPath, out string projectAssetPath))
+            {
+                SetSourcePath(config, projectAssetPath);
+                return;
+            }
+
+            SetSourcePath(config, string.Empty);
+        }
+
+        private SourceInputMode GetSourceInputMode(SyncConfig config)
+        {
+            if (config == null)
+                return SourceInputMode.Internal;
+
+            string sourcePath = config.sourcePath;
+            if (AssetSyncer.IsProjectAssetFolderPath(sourcePath))
+                return SourceInputMode.Internal;
+            if (!string.IsNullOrWhiteSpace(sourcePath))
+                return SourceInputMode.External;
+
+            if (_sourceInputModes.TryGetValue(config, out SourceInputMode mode))
+                return mode;
+
+            return SourceInputMode.Internal;
+        }
+
+        private static string GetInitialSourceFolderPickerPath(string currentSourcePath)
+        {
+            if (string.IsNullOrWhiteSpace(currentSourcePath))
+                return Path.GetDirectoryName(Application.dataPath);
+
+            if (AssetSyncer.IsProjectAssetFolderPath(currentSourcePath))
+                return GetProjectAssetFolderFullPath(currentSourcePath);
+
+            if (AssetSyncer.IsExternalSourceDirectoryPath(currentSourcePath))
+                return Path.GetFullPath(currentSourcePath);
+
+            return Path.GetDirectoryName(Application.dataPath);
+        }
+
+        private static string GetProjectAssetFolderFullPath(string projectAssetPath)
+        {
+            string projectRoot = Path.GetDirectoryName(Application.dataPath);
+            return Path.GetFullPath(Path.Combine(projectRoot, projectAssetPath));
+        }
+
         private static string NicifyTypeName(string assemblyQualifiedName)
         {
             if (string.IsNullOrEmpty(assemblyQualifiedName)) return "(None)";
@@ -1184,6 +1622,12 @@ namespace Nyorowrl.AssetSync.Editor
             string fullName = comma >= 0 ? assemblyQualifiedName.Substring(0, comma).Trim() : assemblyQualifiedName;
             int dot = fullName.LastIndexOf('.');
             return ObjectNames.NicifyVariableName(dot >= 0 ? fullName.Substring(dot + 1) : fullName);
+        }
+
+        private enum SourceInputMode
+        {
+            Internal = 0,
+            External = 1
         }
 
         private static void EnsureConfigCollections(SyncConfig config)
@@ -1223,6 +1667,7 @@ namespace Nyorowrl.AssetSync.Editor
             EditorApplication.delayCall -= FlushDeferredSyncActions;
             _deferredSyncActions.Clear();
             _deferredSyncScheduled = false;
+            _sourceInputModes.Clear();
         }
     }
 }

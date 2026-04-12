@@ -20,10 +20,17 @@ namespace Nyorowrl.AssetSync.Editor.Tests
         private string _dstAssetPath;
         private string _srcFullPath;
         private string _dstFullPath;
+        private bool _hadOriginalSettingsPathPref;
+        private string _originalSettingsPathPrefValue;
 
         [SetUp]
         public void SetUp()
         {
+            _hadOriginalSettingsPathPref = EditorPrefs.HasKey(SettingsPathPrefKey);
+            _originalSettingsPathPrefValue = _hadOriginalSettingsPathPref
+                ? EditorPrefs.GetString(SettingsPathPrefKey, string.Empty)
+                : string.Empty;
+
             string uid = Guid.NewGuid().ToString("N").Substring(0, 8);
             _testRoot = "Assets/AssetSyncWindowTest_" + uid;
             _srcAssetPath = _testRoot + "/Src";
@@ -47,7 +54,10 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             FileUtil.DeleteFileOrDirectory(fullTestRoot);
             FileUtil.DeleteFileOrDirectory(fullTestRoot + ".meta");
             AssetDatabase.Refresh();
-            EditorPrefs.DeleteKey(SettingsPathPrefKey);
+            if (_hadOriginalSettingsPathPref)
+                EditorPrefs.SetString(SettingsPathPrefKey, _originalSettingsPathPrefValue ?? string.Empty);
+            else
+                EditorPrefs.DeleteKey(SettingsPathPrefKey);
             AssetSyncWindow.DisplayDialogOverride = null;
             AssetSyncSettingsDeletionProcessor.DisplayDialogOverride = null;
         }
@@ -356,9 +366,80 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             MethodInfo folderValidMethod = typeof(AssetSyncWindow).GetMethod("IsFolderSelectionValid", BindingFlags.NonPublic | BindingFlags.Static);
             Assert.IsNotNull(folderValidMethod, "IsFolderSelectionValid method not found");
 
-            Assert.IsTrue((bool)folderValidMethod.Invoke(null, new object[] { _srcAssetPath }), "existing folder path should be valid");
-            Assert.IsFalse((bool)folderValidMethod.Invoke(null, new object[] { "" }), "empty path should be invalid");
-            Assert.IsFalse((bool)folderValidMethod.Invoke(null, new object[] { _testRoot + "/NoSuchFolder" }), "missing folder path should be invalid");
+            string externalRoot = Path.Combine(Path.GetTempPath(), "AssetSyncWindowExternal_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(externalRoot);
+            try
+            {
+                Assert.IsTrue((bool)folderValidMethod.Invoke(null, new object[] { _srcAssetPath }), "existing folder path should be valid");
+                Assert.IsTrue((bool)folderValidMethod.Invoke(null, new object[] { externalRoot }), "existing external directory should be valid");
+                Assert.IsFalse((bool)folderValidMethod.Invoke(null, new object[] { "" }), "empty path should be invalid");
+                Assert.IsFalse((bool)folderValidMethod.Invoke(null, new object[] { _testRoot + "/NoSuchFolder" }), "missing folder path should be invalid");
+            }
+            finally
+            {
+                if (Directory.Exists(externalRoot))
+                    Directory.Delete(externalRoot, true);
+            }
+        }
+
+        [Test]
+        public void CanActivateWithSyncButton_ExternalSourceAndProjectDestination_ReturnsTrue()
+        {
+            string externalRoot = Path.Combine(Path.GetTempPath(), "AssetSyncWindowExternal_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(externalRoot);
+            try
+            {
+                MethodInfo canActivateMethod = typeof(AssetSyncWindow).GetMethod("CanActivateWithSyncButton", BindingFlags.NonPublic | BindingFlags.Static);
+                Assert.IsNotNull(canActivateMethod, "CanActivateWithSyncButton method not found");
+
+                var config = new SyncConfig
+                {
+                    isSyncActivated = false,
+                    enabled = false,
+                    sourcePath = externalRoot,
+                    destinationPath = _dstAssetPath
+                };
+
+                bool canActivate = (bool)canActivateMethod.Invoke(null, new object[] { config });
+                Assert.IsTrue(canActivate);
+            }
+            finally
+            {
+                if (Directory.Exists(externalRoot))
+                    Directory.Delete(externalRoot, true);
+            }
+        }
+
+        [Test]
+        public void SwitchSourceMode_EmptySourcePath_CanStayExternal()
+        {
+            var window = ScriptableObject.CreateInstance<AssetSyncWindow>();
+            try
+            {
+                var config = new SyncConfig
+                {
+                    sourcePath = string.Empty,
+                    destinationPath = _dstAssetPath
+                };
+
+                Type sourceInputModeType = typeof(AssetSyncWindow).GetNestedType("SourceInputMode", BindingFlags.NonPublic);
+                Assert.IsNotNull(sourceInputModeType, "SourceInputMode enum not found");
+                object externalMode = Enum.Parse(sourceInputModeType, "External");
+
+                MethodInfo switchSourceModeMethod = typeof(AssetSyncWindow).GetMethod("SwitchSourceMode", BindingFlags.NonPublic | BindingFlags.Instance);
+                Assert.IsNotNull(switchSourceModeMethod, "SwitchSourceMode method not found");
+                switchSourceModeMethod.Invoke(window, new[] { config, externalMode });
+
+                MethodInfo getSourceInputModeMethod = typeof(AssetSyncWindow).GetMethod("GetSourceInputMode", BindingFlags.NonPublic | BindingFlags.Instance);
+                Assert.IsNotNull(getSourceInputModeMethod, "GetSourceInputMode method not found");
+                object currentMode = getSourceInputModeMethod.Invoke(window, new object[] { config });
+
+                Assert.AreEqual("External", currentMode?.ToString(), "empty source path should keep External mode after toggle");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(window);
+            }
         }
 
         [Test]
@@ -446,6 +527,51 @@ namespace Nyorowrl.AssetSync.Editor.Tests
 
             Assert.IsTrue((bool)isIgnoreGuidValidMethod.Invoke(null, new object[] { config, destinationGuid }));
             Assert.IsFalse((bool)isIgnoreGuidValidMethod.Invoke(null, new object[] { config, sourceGuid }));
+        }
+
+        [Test]
+        public void GetPreviewIcon_ExternalCsPath_UsesScriptIcon()
+        {
+            MethodInfo getPreviewIconMethod = typeof(AssetSyncWindow).GetMethod("GetPreviewIcon", BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.IsNotNull(getPreviewIconMethod, "GetPreviewIcon method not found");
+
+            string externalScriptPath = Path.Combine(Path.GetTempPath(), "AssetSyncWindowPreview_" + Guid.NewGuid().ToString("N") + ".cs");
+            var icon = (Texture)getPreviewIconMethod.Invoke(null, new object[] { externalScriptPath, string.Empty });
+
+            Texture expectedScriptIcon = EditorGUIUtility.IconContent("cs Script Icon")?.image
+                ?? EditorGUIUtility.IconContent("Script Icon")?.image
+                ?? EditorGUIUtility.IconContent("TextAsset Icon")?.image;
+
+            Assert.IsNotNull(icon, "preview icon should not be null for .cs path");
+            if (expectedScriptIcon != null)
+                Assert.AreEqual(expectedScriptIcon, icon, ".cs preview should prefer script icon");
+        }
+
+        [Test]
+        public void GetPreviewIcon_ExternalDirectoryPath_UsesFolderIcon()
+        {
+            MethodInfo getPreviewIconMethod = typeof(AssetSyncWindow).GetMethod("GetPreviewIcon", BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.IsNotNull(getPreviewIconMethod, "GetPreviewIcon method not found");
+
+            string externalDirectory = Path.Combine(Path.GetTempPath(), "AssetSyncWindowPreviewDir_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(externalDirectory);
+            try
+            {
+                var icon = (Texture)getPreviewIconMethod.Invoke(null, new object[] { externalDirectory, string.Empty });
+
+                Texture expectedFolderIcon = EditorGUIUtility.IconContent("Folder Icon")?.image
+                    ?? EditorGUIUtility.IconContent("FolderEmpty Icon")?.image
+                    ?? EditorGUIUtility.IconContent("DefaultAsset Icon")?.image;
+
+                Assert.IsNotNull(icon, "preview icon should not be null for directory path");
+                if (expectedFolderIcon != null)
+                    Assert.AreEqual(expectedFolderIcon, icon, "directory preview should use folder icon");
+            }
+            finally
+            {
+                if (Directory.Exists(externalDirectory))
+                    Directory.Delete(externalDirectory, true);
+            }
         }
 
         private string CreateSettingsAssetPath(string assetName, List<SyncConfig> configs)

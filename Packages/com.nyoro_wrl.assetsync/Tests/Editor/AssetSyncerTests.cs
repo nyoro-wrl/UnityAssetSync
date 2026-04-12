@@ -109,13 +109,17 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             return File.GetLastWriteTimeUtc(Path.Combine(_dstFullPath, relPath.Replace('/', Path.DirectorySeparatorChar)));
         }
 
-        private SyncConfig MakeConfig(List<FilterCondition> filters = null, bool includeSubdirectories = true)
+        private SyncConfig MakeConfig(
+            List<FilterCondition> filters = null,
+            bool includeSubdirectories = true,
+            bool keepEmptyDirectories = false)
         {
             return new SyncConfig
             {
                 configName = "TestConfig",
                 enabled = true,
                 includeSubdirectories = includeSubdirectories,
+                keepEmptyDirectories = keepEmptyDirectories,
                 sourcePath = _srcAssetPath,
                 destinationPath = _dstAssetPath,
                 filters = filters ?? new List<FilterCondition>()
@@ -233,14 +237,14 @@ namespace Nyorowrl.AssetSync.Editor.Tests
         }
 
         [Test]
-        public void CollectCopyPreviewDestinationAssetPaths_EmptySubdirectory_IncludesDirectoryPath()
+        public void CollectCopyPreviewDestinationAssetPaths_EmptySubdirectory_DoesNotIncludeDirectoryPath()
         {
             Directory.CreateDirectory(Path.Combine(_srcFullPath, "preview", "empty"));
             var config = MakeConfig();
 
             IReadOnlyList<string> preview = AssetSyncer.CollectCopyPreviewDestinationAssetPaths(config);
 
-            CollectionAssert.Contains(preview, _dstAssetPath + "/preview/empty");
+            CollectionAssert.DoesNotContain(preview, _dstAssetPath + "/preview/empty");
         }
 
         [Test]
@@ -253,6 +257,87 @@ namespace Nyorowrl.AssetSync.Editor.Tests
 
             CollectionAssert.Contains(preview, _dstAssetPath + "/preview/non-empty/file.txt");
             CollectionAssert.DoesNotContain(preview, _dstAssetPath + "/preview/non-empty");
+        }
+
+        [Test]
+        public void CollectCopyPreviewDestinationAssetPaths_KeepEmptyDirectories_IncludesNestedDirectoryPaths()
+        {
+            WriteSrc("content/with-file/data.txt", "v1");
+            Directory.CreateDirectory(Path.Combine(_srcFullPath, "content", "empty", "leaf"));
+
+            var config = MakeConfig(includeSubdirectories: true, keepEmptyDirectories: true);
+
+            IReadOnlyList<string> preview = AssetSyncer.CollectCopyPreviewDestinationAssetPaths(config);
+
+            CollectionAssert.Contains(preview, _dstAssetPath + "/content");
+            CollectionAssert.Contains(preview, _dstAssetPath + "/content/with-file");
+            CollectionAssert.Contains(preview, _dstAssetPath + "/content/empty");
+            CollectionAssert.Contains(preview, _dstAssetPath + "/content/empty/leaf");
+            CollectionAssert.Contains(preview, _dstAssetPath + "/content/with-file/data.txt");
+        }
+
+        [Test]
+        public void CollectCopyPreviewDestinationAssetPaths_KeepEmptyDirectories_WithFilters_IncludesDirectoriesThatBecomeEmpty()
+        {
+            WriteSrc("filtered/by-filter/only.bytes", "x");
+            var includeByExtension = new FilterCondition
+            {
+                targetKind = FilterConditionTargetKind.Extension,
+                multipleExtensions = new List<string> { ".txt" }
+            };
+            var config = MakeConfig(
+                new List<FilterCondition> { includeByExtension },
+                includeSubdirectories: true,
+                keepEmptyDirectories: true);
+
+            IReadOnlyList<string> preview = AssetSyncer.CollectCopyPreviewDestinationAssetPaths(config);
+
+            CollectionAssert.Contains(preview, _dstAssetPath + "/filtered");
+            CollectionAssert.Contains(preview, _dstAssetPath + "/filtered/by-filter");
+            CollectionAssert.DoesNotContain(preview, _dstAssetPath + "/filtered/by-filter/only.bytes");
+        }
+
+        [Test]
+        public void CollectCopyPreviewDestinationAssetPaths_KeepEmptyDirectories_SortsDirectoriesFirstWithinSameParent()
+        {
+            WriteSrc("sameParent/alpha.txt", "a");
+            WriteSrc("sameParent/beta.txt", "b");
+            Directory.CreateDirectory(Path.Combine(_srcFullPath, "sameParent", "nestedDir"));
+            var config = MakeConfig(includeSubdirectories: true, keepEmptyDirectories: true);
+
+            IReadOnlyList<string> preview = AssetSyncer.CollectCopyPreviewDestinationAssetPaths(config);
+            List<string> previewList = preview.ToList();
+
+            int nestedDirIndex = previewList.IndexOf(_dstAssetPath + "/sameParent/nestedDir");
+            int alphaIndex = previewList.IndexOf(_dstAssetPath + "/sameParent/alpha.txt");
+            int betaIndex = previewList.IndexOf(_dstAssetPath + "/sameParent/beta.txt");
+
+            Assert.GreaterOrEqual(nestedDirIndex, 0, "directory entry should exist in preview");
+            Assert.GreaterOrEqual(alphaIndex, 0, "file entry should exist in preview");
+            Assert.GreaterOrEqual(betaIndex, 0, "file entry should exist in preview");
+            Assert.Less(nestedDirIndex, alphaIndex, "directory should be listed before sibling files");
+            Assert.Less(nestedDirIndex, betaIndex, "directory should be listed before sibling files");
+        }
+
+        [Test]
+        public void CollectCopyPreviewEntries_KeepEmptyDirectories_IncludeUnchangedShowsAlreadySyncedDirectories()
+        {
+            WriteSrc("nested/a/file.txt", "v1");
+            Directory.CreateDirectory(Path.Combine(_srcFullPath, "nested", "empty", "leaf"));
+            var config = MakeConfig(includeSubdirectories: true, keepEmptyDirectories: true);
+
+            AssetSyncer.SyncConfig(config);
+
+            IReadOnlyList<AssetSyncer.PreviewCopyEntry> preview = AssetSyncer.CollectCopyPreviewEntries(
+                config,
+                includeUnchanged: true);
+            IReadOnlyList<string> destinationPaths = preview.Select(entry => entry.DestinationAssetPath).ToList();
+
+            CollectionAssert.Contains(destinationPaths, _dstAssetPath + "/nested");
+            CollectionAssert.Contains(destinationPaths, _dstAssetPath + "/nested/a");
+            CollectionAssert.Contains(destinationPaths, _dstAssetPath + "/nested/empty");
+            CollectionAssert.Contains(destinationPaths, _dstAssetPath + "/nested/empty/leaf");
+            CollectionAssert.Contains(destinationPaths, _dstAssetPath + "/nested/a/file.txt");
         }
         // #19
         [Test]
@@ -351,14 +436,14 @@ namespace Nyorowrl.AssetSync.Editor.Tests
         }
 
         [Test]
-        public void SyncConfig_Disabled_RemovesManagedEmptySubdirectoryWithoutFiles()
+        public void SyncConfig_EmptySubdirectory_IsNotCreatedAndNotTracked()
         {
             Directory.CreateDirectory(Path.Combine(_srcFullPath, "sub", "empty"));
             var config = MakeConfig();
 
             AssetSyncer.SyncConfig(config);
-            Assert.IsTrue(Directory.Exists(Path.Combine(_dstFullPath, "sub", "empty")));
-            Assert.IsTrue(SyncDirectoryContains(config, "sub/empty"));
+            Assert.IsFalse(Directory.Exists(Path.Combine(_dstFullPath, "sub", "empty")));
+            Assert.IsFalse(SyncDirectoryContains(config, "sub/empty"));
 
             config.enabled = false;
             AssetSyncer.SyncConfig(config);
@@ -396,6 +481,95 @@ namespace Nyorowrl.AssetSync.Editor.Tests
                 destinationPath = _dstAssetPath,
                 enabled = true
             });
+        }
+
+        [Test]
+        public void SyncConfig_ExternalSourceDirectory_CopiesFiles()
+        {
+            string externalRoot = Path.Combine(Path.GetTempPath(), "AssetSyncExternal_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(externalRoot);
+            try
+            {
+                File.WriteAllText(Path.Combine(externalRoot, "external.txt"), "external");
+
+                var config = MakeConfig();
+                config.sourcePath = externalRoot;
+
+                int copied = AssetSyncer.SyncConfig(config);
+
+                Assert.AreEqual(1, copied);
+                Assert.IsTrue(DstExists("external.txt"));
+                Assert.IsTrue(SyncContains(config, "external.txt"));
+            }
+            finally
+            {
+                if (Directory.Exists(externalRoot))
+                    Directory.Delete(externalRoot, true);
+            }
+        }
+
+        [Test]
+        public void SyncConfig_ExternalSourceDirectory_ExtensionFilter_Works()
+        {
+            string externalRoot = Path.Combine(Path.GetTempPath(), "AssetSyncExternal_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(externalRoot);
+            try
+            {
+                File.WriteAllText(Path.Combine(externalRoot, "a.txt"), "A");
+                File.WriteAllText(Path.Combine(externalRoot, "b.bytes"), "B");
+
+                var config = MakeConfig(new List<FilterCondition>
+                {
+                    new FilterCondition
+                    {
+                        targetKind = FilterConditionTargetKind.Extension,
+                        multipleExtensions = new List<string> { ".txt" }
+                    }
+                });
+                config.sourcePath = externalRoot;
+
+                AssetSyncer.SyncConfig(config);
+
+                Assert.IsTrue(DstExists("a.txt"));
+                Assert.IsFalse(DstExists("b.bytes"));
+            }
+            finally
+            {
+                if (Directory.Exists(externalRoot))
+                    Directory.Delete(externalRoot, true);
+            }
+        }
+
+        [Test]
+        public void TryGetConfigWarning_ExternalSourceDirectory_WithTypeFilter_ReturnsWarning()
+        {
+            string externalRoot = Path.Combine(Path.GetTempPath(), "AssetSyncExternal_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(externalRoot);
+            try
+            {
+                bool hasWarning = AssetSyncer.TryGetConfigWarning(new SyncConfig
+                {
+                    sourcePath = externalRoot,
+                    destinationPath = _dstAssetPath,
+                    enabled = true,
+                    filters = new List<FilterCondition>
+                    {
+                        new FilterCondition
+                        {
+                            targetKind = FilterConditionTargetKind.Type,
+                            multipleTypeNames = new List<string> { typeof(TextAsset).AssemblyQualifiedName }
+                        }
+                    }
+                }, out string warning);
+
+                Assert.IsTrue(hasWarning);
+                StringAssert.Contains("only Extension filters are supported", warning);
+            }
+            finally
+            {
+                if (Directory.Exists(externalRoot))
+                    Directory.Delete(externalRoot, true);
+            }
         }
 
         // #23
@@ -644,11 +818,24 @@ namespace Nyorowrl.AssetSync.Editor.Tests
         }
 
         [Test]
-        public void Phase1_EmptySubdir_CopiedWhenIncludeSubdirectoriesIsTrue()
+        public void Phase1_EmptySubdir_NotCopiedWhenIncludeSubdirectoriesIsTrue()
         {
             Directory.CreateDirectory(Path.Combine(_srcFullPath, "sub", "empty"));
 
             var config = MakeConfig(includeSubdirectories: true);
+            AssetSyncer.SyncConfig(config);
+
+            Assert.IsFalse(Directory.Exists(Path.Combine(_dstFullPath, "sub", "empty")));
+            Assert.IsFalse(SyncDirectoryContains(config, "sub"));
+            Assert.IsFalse(SyncDirectoryContains(config, "sub/empty"));
+        }
+
+        [Test]
+        public void Phase1_EmptySubdir_CopiedWhenKeepEmptyDirectoriesIsTrue()
+        {
+            Directory.CreateDirectory(Path.Combine(_srcFullPath, "sub", "empty"));
+
+            var config = MakeConfig(includeSubdirectories: true, keepEmptyDirectories: true);
             AssetSyncer.SyncConfig(config);
 
             Assert.IsTrue(Directory.Exists(Path.Combine(_dstFullPath, "sub", "empty")));
@@ -669,6 +856,101 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             Assert.IsFalse(Directory.Exists(Path.Combine(_dstFullPath, "sub")));
             Assert.IsFalse(SyncDirectoryContains(config, "sub"));
             Assert.IsFalse(SyncDirectoryContains(config, "sub/empty"));
+        }
+
+        [Test]
+        public void Phase1_NestedEmptyDirectories_NotCreatedInDestination_WithoutFilters()
+        {
+            WriteSrc("root.txt", "root");
+            Directory.CreateDirectory(Path.Combine(_srcFullPath, "nested", "inner", "leafEmpty"));
+
+            var config = MakeConfig(includeSubdirectories: true);
+            AssetSyncer.SyncConfig(config);
+
+            Assert.IsTrue(DstExists("root.txt"));
+            Assert.IsFalse(Directory.Exists(Path.Combine(_dstFullPath, "nested", "inner", "leafEmpty")),
+                "empty leaf directory should not be created in destination");
+            Assert.IsFalse(Directory.Exists(Path.Combine(_dstFullPath, "nested", "inner")),
+                "directory containing only empty directories should not be created in destination");
+            Assert.IsFalse(Directory.Exists(Path.Combine(_dstFullPath, "nested")),
+                "ancestor directory containing only empty directories should not be created in destination");
+
+            Assert.IsFalse(SyncDirectoryContains(config, "nested"));
+            Assert.IsFalse(SyncDirectoryContains(config, "nested/inner"));
+            Assert.IsFalse(SyncDirectoryContains(config, "nested/inner/leafEmpty"));
+        }
+
+        [Test]
+        public void Phase1_NestedEmptyDirectories_NotCreatedInDestination_WhenBecomingEmptyByFilters()
+        {
+            WriteSrc("root.txt", "root");
+            WriteSrc("filteredOut/sub/only.bytes", "X");
+            WriteSrc("filteredOut/sub/deep/only2.bytes", "Y");
+            Directory.CreateDirectory(Path.Combine(_srcFullPath, "alreadyEmpty", "leafEmpty"));
+
+            var includeByExtension = new FilterCondition
+            {
+                targetKind = FilterConditionTargetKind.Extension,
+                multipleExtensions = new List<string> { ".txt" }
+            };
+            var config = MakeConfig(new List<FilterCondition> { includeByExtension }, includeSubdirectories: true);
+            AssetSyncer.SyncConfig(config);
+
+            Assert.IsTrue(DstExists("root.txt"));
+            Assert.IsFalse(DstExists("filteredOut/sub/only.bytes"));
+            Assert.IsFalse(DstExists("filteredOut/sub/deep/only2.bytes"));
+            Assert.IsFalse(Directory.Exists(Path.Combine(_dstFullPath, "filteredOut", "sub", "deep")),
+                "directory should not be created when all files under it are filtered out");
+            Assert.IsFalse(Directory.Exists(Path.Combine(_dstFullPath, "filteredOut", "sub")),
+                "directory containing only filtered-out descendants should not be created in destination");
+            Assert.IsFalse(Directory.Exists(Path.Combine(_dstFullPath, "filteredOut")),
+                "ancestor directory containing only filtered-out descendants should not be created in destination");
+
+            Assert.IsFalse(Directory.Exists(Path.Combine(_dstFullPath, "alreadyEmpty", "leafEmpty")),
+                "empty leaf directory should not be created in destination");
+            Assert.IsFalse(Directory.Exists(Path.Combine(_dstFullPath, "alreadyEmpty")),
+                "directory containing only empty directories should not be created in destination");
+
+            Assert.IsFalse(SyncDirectoryContains(config, "filteredOut"));
+            Assert.IsFalse(SyncDirectoryContains(config, "filteredOut/sub"));
+            Assert.IsFalse(SyncDirectoryContains(config, "filteredOut/sub/deep"));
+            Assert.IsFalse(SyncDirectoryContains(config, "alreadyEmpty"));
+            Assert.IsFalse(SyncDirectoryContains(config, "alreadyEmpty/leafEmpty"));
+        }
+
+        [Test]
+        public void Phase1_NestedEmptyDirectories_CreatedInDestination_WhenKeepEmptyDirectoriesIsTrue()
+        {
+            WriteSrc("root.txt", "root");
+            WriteSrc("filteredOut/sub/only.bytes", "X");
+            WriteSrc("filteredOut/sub/deep/only2.bytes", "Y");
+            Directory.CreateDirectory(Path.Combine(_srcFullPath, "alreadyEmpty", "leafEmpty"));
+
+            var includeByExtension = new FilterCondition
+            {
+                targetKind = FilterConditionTargetKind.Extension,
+                multipleExtensions = new List<string> { ".txt" }
+            };
+            var config = MakeConfig(
+                new List<FilterCondition> { includeByExtension },
+                includeSubdirectories: true,
+                keepEmptyDirectories: true);
+            AssetSyncer.SyncConfig(config);
+
+            Assert.IsTrue(DstExists("root.txt"));
+            Assert.IsFalse(DstExists("filteredOut/sub/only.bytes"));
+            Assert.IsFalse(DstExists("filteredOut/sub/deep/only2.bytes"));
+
+            Assert.IsTrue(Directory.Exists(Path.Combine(_dstFullPath, "filteredOut", "sub", "deep")),
+                "directory should be created when Keep Empty Directories is enabled");
+            Assert.IsTrue(Directory.Exists(Path.Combine(_dstFullPath, "alreadyEmpty", "leafEmpty")),
+                "empty leaf directory should be created when Keep Empty Directories is enabled");
+
+            Assert.IsTrue(SyncDirectoryContains(config, "filteredOut"));
+            Assert.IsTrue(SyncDirectoryContains(config, "filteredOut/sub"));
+            Assert.IsTrue(SyncDirectoryContains(config, "filteredOut/sub/deep"));
+            Assert.IsTrue(SyncDirectoryContains(config, "alreadyEmpty"));
+            Assert.IsTrue(SyncDirectoryContains(config, "alreadyEmpty/leafEmpty"));
         }
 
         // #30
@@ -894,8 +1176,8 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             var config = MakeConfig();
             AssetSyncer.SyncConfig(config);
 
-            Assert.IsTrue(Directory.Exists(Path.Combine(_dstFullPath, "sub", "empty")));
-            Assert.IsTrue(SyncDirectoryContains(config, "sub/empty"));
+            Assert.IsFalse(Directory.Exists(Path.Combine(_dstFullPath, "sub", "empty")));
+            Assert.IsFalse(SyncDirectoryContains(config, "sub/empty"));
 
             DeleteSrcDirectory("sub/empty");
             if (!Directory.EnumerateFileSystemEntries(Path.Combine(_srcFullPath, "sub")).Any())
@@ -1110,6 +1392,45 @@ namespace Nyorowrl.AssetSync.Editor.Tests
 
             Assert.IsFalse(DstExists("src-file.txt"), "filtered-out src file must not be copied");
             Assert.IsTrue(DstExists("manual.txt"), "manually placed dst file must not be deleted");
+        }
+
+        [Test]
+        public void Integration_FilterIncludeExtension_OnlyMatchingExtensionCopied()
+        {
+            WriteSrc("a.txt", "A");
+            WriteSrc("b.bytes", "B");
+            AssetDatabase.Refresh();
+
+            var includeByExtension = new FilterCondition
+            {
+                targetKind = FilterConditionTargetKind.Extension,
+                multipleExtensions = new List<string> { "txt" }
+            };
+
+            AssetSyncer.SyncConfig(MakeConfig(new List<FilterCondition> { includeByExtension }));
+
+            Assert.IsTrue(DstExists("a.txt"));
+            Assert.IsFalse(DstExists("b.bytes"));
+        }
+
+        [Test]
+        public void Integration_FilterExcludeExtension_MatchingExtensionExcluded()
+        {
+            WriteSrc("a.txt", "A");
+            WriteSrc("b.bytes", "B");
+            AssetDatabase.Refresh();
+
+            var excludeByExtension = new FilterCondition
+            {
+                targetKind = FilterConditionTargetKind.Extension,
+                invert = true,
+                multipleExtensions = new List<string> { ".txt" }
+            };
+
+            AssetSyncer.SyncConfig(MakeConfig(new List<FilterCondition> { excludeByExtension }));
+
+            Assert.IsFalse(DstExists("a.txt"));
+            Assert.IsTrue(DstExists("b.bytes"));
         }
 
         [Test]

@@ -6,6 +6,40 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-04-13
+
+### Added
+
+- Added external source directory support with `External Source` toggle and `Source` path + `Browse` workflow.
+- Added `Keep Empty Directories` option to control whether empty directories are created/managed in destination.
+- Added tests covering nested empty-directory behavior (with/without filters), external source behavior, and preview ordering/icon regressions.
+
+### Changed
+
+- Kept internal source editing as `ObjectField`, while external source uses filesystem path input.
+- Updated preview collection to include managed directory entries when `Keep Empty Directories` is enabled.
+- Updated preview sorting so directories are listed before files within the same parent path.
+- Expanded preview icon resolution for more file types, including explicit handling for `.cs` and directories.
+
+### Fixed
+
+- Fixed repeated `Invalid AssetDatabase path` warnings by guarding absolute path usage in preview/project selection flows.
+- Fixed `External Source` toggle layout to match other checkboxes.
+- Fixed test side effect where running editor tests could clear the remembered `Settings` path in `AssetSyncWindow`.
+
+## [1.4.0] - 2026-04-12
+
+### Added
+
+- Added `Extension` filter target in the `Filters` UI (`Type` / `Asset` / `Extension`).
+- Added extension-based include/exclude evaluation to sync logic.
+- Added extension filter tests for both condition evaluation and sync integration.
+
+### Changed
+
+- Updated package metadata description to reflect support for type, asset, and extension filters.
+- Updated documentation and README filter descriptions to include extension filtering.
+
 ## [1.3.0] - 2026-04-05
 
 ### Changed

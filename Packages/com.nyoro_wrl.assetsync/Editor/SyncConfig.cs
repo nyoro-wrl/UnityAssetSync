@@ -8,6 +8,7 @@ namespace Nyorowrl.AssetSync
         public bool enabled = false;
         public bool isSyncActivated = false;
         public bool includeSubdirectories = false;
+        public bool keepEmptyDirectories = false;
         public string configName;
         public string sourcePath;
         public string destinationPath;

@@ -122,14 +122,14 @@ namespace Nyorowrl.AssetSync.Editor.Tests
         }
 
         [Test]
-        public void TryCleanupSyncedFilesFromDeletedSettingsAsset_RemovesManagedEmptySubdirectoryWithoutFiles()
+        public void TryCleanupSyncedFilesFromDeletedSettingsAsset_OnlyEmptySourceSubdirectory_ReturnsFalse()
         {
             Directory.CreateDirectory(Path.Combine(_srcFullPath, "sub", "empty"));
             AssetDatabase.Refresh();
 
             var config = CreateConfig();
             AssetSyncer.SyncConfig(config);
-            Assert.IsTrue(Directory.Exists(Path.Combine(_dstFullPath, "sub", "empty")));
+            Assert.IsFalse(Directory.Exists(Path.Combine(_dstFullPath, "sub", "empty")));
 
             var settings = ScriptableObject.CreateInstance<AssetSyncSettings>();
             settings.syncConfigs = new List<SyncConfig> { config };
@@ -140,7 +140,7 @@ namespace Nyorowrl.AssetSync.Editor.Tests
 
             bool changed = AssetSyncSettingsDeletionProcessor.TryCleanupSyncedFilesFromDeletedSettingsAsset(settingsAssetPath);
 
-            Assert.IsTrue(changed);
+            Assert.IsFalse(changed);
             Assert.IsFalse(Directory.Exists(Path.Combine(_dstFullPath, "sub", "empty")));
             Assert.IsFalse(Directory.Exists(Path.Combine(_dstFullPath, "sub")));
         }
