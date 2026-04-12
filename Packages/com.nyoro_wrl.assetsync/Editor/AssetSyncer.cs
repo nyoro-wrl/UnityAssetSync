@@ -38,11 +38,13 @@ namespace Nyorowrl.AssetSync.Editor
         {
             public readonly string SourceAssetPath;
             public readonly string DestinationAssetPath;
+            public readonly bool IsDirectory;
 
-            public PreviewCopyEntry(string sourceAssetPath, string destinationAssetPath)
+            public PreviewCopyEntry(string sourceAssetPath, string destinationAssetPath, bool isDirectory = false)
             {
                 SourceAssetPath = sourceAssetPath;
                 DestinationAssetPath = destinationAssetPath;
+                IsDirectory = isDirectory;
             }
         }
 
@@ -74,14 +76,14 @@ namespace Nyorowrl.AssetSync.Editor
             }
         }
 
-        private readonly struct EmptyDirectoryCandidate
+        private readonly struct ManagedDirectoryCandidate
         {
             public readonly string NormalizedRelativePath;
             public readonly string DestinationDirectoryPath;
             public readonly string SourceAssetPath;
             public readonly string DestinationAssetPath;
 
-            public EmptyDirectoryCandidate(
+            public ManagedDirectoryCandidate(
                 string normalizedRelativePath,
                 string destinationDirectoryPath,
                 string sourceAssetPath,
@@ -453,8 +455,9 @@ namespace Nyorowrl.AssetSync.Editor
 
             SyncManagedDestinationDirectories(
                 config,
-                srcRoot,
                 dstRoot,
+                synced,
+                srcRoot,
                 ignoredFiles,
                 ignoredDirectories,
                 syncedDirectories,
@@ -468,8 +471,9 @@ namespace Nyorowrl.AssetSync.Editor
 
         private static void SyncManagedDestinationDirectories(
             SyncConfig config,
-            string srcRoot,
             string dstRoot,
+            HashSet<string> syncedFiles,
+            string srcRoot,
             HashSet<string> ignoredFiles,
             HashSet<string> ignoredDirectories,
             HashSet<string> syncedDirectories,
@@ -479,22 +483,51 @@ namespace Nyorowrl.AssetSync.Editor
             var sourceDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             if (config.includeSubdirectories)
             {
-                foreach (string sourceDirectory in Directory.GetDirectories(srcRoot, "*", SearchOption.AllDirectories))
+                if (config.keepEmptyDirectories)
                 {
-                    string relPath = sourceDirectory.Substring(srcRoot.Length).TrimStart(Path.DirectorySeparatorChar, '/');
-                    string normalizedRel = NormalizeRelativePath(relPath);
-                    if (string.IsNullOrEmpty(normalizedRel))
-                        continue;
+                    foreach (string sourceDirectory in Directory.GetDirectories(srcRoot, "*", SearchOption.AllDirectories))
+                    {
+                        string relPath = sourceDirectory.Substring(srcRoot.Length).TrimStart(Path.DirectorySeparatorChar, '/');
+                        string normalizedRel = NormalizeRelativePath(relPath);
+                        if (string.IsNullOrEmpty(normalizedRel))
+                            continue;
+                        if (!IsWithinSyncScope(normalizedRel, config.includeSubdirectories))
+                            continue;
+                        if (IsIgnoreRelativePath(normalizedRel, ignoredFiles, ignoredDirectories))
+                            continue;
+
+                        sourceDirectories.Add(normalizedRel);
+                    }
+                }
+                else
+                {
+                    foreach (string syncedRelativeFilePath in syncedFiles)
+                    {
+                        string normalizedFilePath = NormalizeRelativePath(syncedRelativeFilePath);
+                        if (string.IsNullOrEmpty(normalizedFilePath))
+                            continue;
+                        if (IsIgnoreRelativePath(normalizedFilePath, ignoredFiles, ignoredDirectories))
+                            continue;
+
+                        int separatorIndex = normalizedFilePath.LastIndexOf('/');
+                        while (separatorIndex > 0)
+                        {
+                            string normalizedDirectoryPath = normalizedFilePath.Substring(0, separatorIndex);
+                            sourceDirectories.Add(normalizedDirectoryPath);
+                            separatorIndex = normalizedDirectoryPath.LastIndexOf('/');
+                        }
+                    }
+                }
+
+                foreach (string normalizedRel in sourceDirectories.OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
+                {
                     if (!IsWithinSyncScope(normalizedRel, config.includeSubdirectories))
-                        continue;
-                    if (IsIgnoreRelativePath(normalizedRel, ignoredFiles, ignoredDirectories))
                         continue;
 
                     string destinationDirectory = Path.Combine(dstRoot, NormalizedRelativePathToSystemPath(normalizedRel));
                     if (File.Exists(destinationDirectory))
                         continue;
 
-                    sourceDirectories.Add(normalizedRel);
                     if (!Directory.Exists(destinationDirectory))
                     {
                         Directory.CreateDirectory(destinationDirectory);
@@ -532,6 +565,10 @@ namespace Nyorowrl.AssetSync.Editor
             string dstAssetRoot)
         {
             var result = new List<SourceCandidate>();
+            bool sourceIsProjectAssetFolder = IsProjectAssetFolderPath(srcAssetRoot);
+            string normalizedSourceAssetRoot = sourceIsProjectAssetFolder
+                ? NormalizeAssetPath(srcAssetRoot)
+                : string.Empty;
 
             SearchOption srcSearchOption = config.includeSubdirectories
                 ? SearchOption.AllDirectories
@@ -548,19 +585,24 @@ namespace Nyorowrl.AssetSync.Editor
                 if (!IsWithinSyncScope(normalizedRel, config.includeSubdirectories))
                     continue;
 
-                string srcAssetPath = srcAssetRoot + "/" + normalizedRel;
-                if (!PassesFilters(srcAssetPath, config.filters, config.sourcePath))
+                string srcFilterPath = sourceIsProjectAssetFolder
+                    ? normalizedSourceAssetRoot + "/" + normalizedRel
+                    : NormalizeFullPath(srcFile);
+                if (!PassesFilters(srcFilterPath, config.filters, sourceIsProjectAssetFolder ? normalizedSourceAssetRoot : null))
                     continue;
 
                 string relSystem = NormalizedRelativePathToSystemPath(normalizedRel);
                 string dstFile = Path.Combine(dstRoot, relSystem);
                 string dstAssetPath = dstAssetRoot + "/" + normalizedRel;
+                string srcDisplayPath = sourceIsProjectAssetFolder
+                    ? srcFilterPath
+                    : NormalizeFullPath(srcFile);
 
                 result.Add(new SourceCandidate(
                     normalizedRel,
                     srcFile,
                     dstFile,
-                    srcAssetPath,
+                    srcDisplayPath,
                     dstAssetPath));
             }
 
@@ -741,28 +783,42 @@ namespace Nyorowrl.AssetSync.Editor
                 if (!includeUnchanged && !ShouldCopy(candidate.SourceFilePath, candidate.DestinationFilePath))
                     continue;
 
-                result.Add(new PreviewCopyEntry(candidate.SourceAssetPath, candidate.DestinationAssetPath));
+                result.Add(new PreviewCopyEntry(
+                    candidate.SourceAssetPath,
+                    candidate.DestinationAssetPath,
+                    isDirectory: false));
             }
 
-            foreach (var emptyDirectory in CollectEmptyDirectoryCandidates(config, srcRoot, dstRoot, config.sourcePath, config.destinationPath)
-                .OrderBy(c => c.NormalizedRelativePath, StringComparer.OrdinalIgnoreCase))
+            if (config.includeSubdirectories && config.keepEmptyDirectories)
             {
-                string rel = emptyDirectory.NormalizedRelativePath;
-                if (IsIgnoreRelativePath(rel, ignoredFiles, ignoredDirectories))
-                    continue;
-                if (File.Exists(emptyDirectory.DestinationDirectoryPath))
-                    continue;
+                IReadOnlyList<ManagedDirectoryCandidate> directoryCandidates = CollectManagedDirectoryCandidates(
+                    config,
+                    srcRoot,
+                    dstRoot,
+                    config.sourcePath,
+                    config.destinationPath);
 
-                bool destinationDirectoryExists = Directory.Exists(emptyDirectory.DestinationDirectoryPath);
-                if (!includeUnchanged && destinationDirectoryExists)
-                    continue;
+                foreach (var candidate in directoryCandidates.OrderBy(c => c.NormalizedRelativePath, StringComparer.OrdinalIgnoreCase))
+                {
+                    string rel = candidate.NormalizedRelativePath;
+                    if (IsIgnoreRelativePath(rel, ignoredFiles, ignoredDirectories))
+                        continue;
 
-                result.Add(new PreviewCopyEntry(emptyDirectory.SourceAssetPath, emptyDirectory.DestinationAssetPath));
+                    if (File.Exists(candidate.DestinationDirectoryPath))
+                        continue;
+
+                    if (!includeUnchanged && Directory.Exists(candidate.DestinationDirectoryPath))
+                        continue;
+
+                    result.Add(new PreviewCopyEntry(
+                        candidate.SourceAssetPath,
+                        candidate.DestinationAssetPath,
+                        isDirectory: true));
+                }
             }
 
-            return result
-                .OrderBy(e => e.DestinationAssetPath, StringComparer.OrdinalIgnoreCase)
-                .ToList();
+            result.Sort(ComparePreviewEntries);
+            return result;
         }
 
         internal static IReadOnlyList<string> CollectCopyPreviewDestinationAssetPaths(SyncConfig config)
@@ -770,6 +826,57 @@ namespace Nyorowrl.AssetSync.Editor
             return CollectCopyPreviewEntries(config)
                 .Select(e => e.DestinationAssetPath)
                 .ToList();
+        }
+
+        private static int ComparePreviewEntries(PreviewCopyEntry left, PreviewCopyEntry right)
+        {
+            string leftPath = NormalizePreviewSortPath(left.DestinationAssetPath);
+            string rightPath = NormalizePreviewSortPath(right.DestinationAssetPath);
+
+            string leftParentPath = GetPreviewSortParentPath(leftPath);
+            string rightParentPath = GetPreviewSortParentPath(rightPath);
+
+            int parentCompare = StringComparer.OrdinalIgnoreCase.Compare(leftParentPath, rightParentPath);
+            if (parentCompare != 0)
+                return parentCompare;
+
+            if (left.IsDirectory != right.IsDirectory)
+                return left.IsDirectory ? -1 : 1;
+
+            string leftName = GetPreviewSortLeafName(leftPath);
+            string rightName = GetPreviewSortLeafName(rightPath);
+
+            int nameCompare = StringComparer.OrdinalIgnoreCase.Compare(leftName, rightName);
+            if (nameCompare != 0)
+                return nameCompare;
+
+            return StringComparer.OrdinalIgnoreCase.Compare(leftPath, rightPath);
+        }
+
+        private static string NormalizePreviewSortPath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return string.Empty;
+
+            return path.Replace('\\', '/').TrimEnd('/');
+        }
+
+        private static string GetPreviewSortParentPath(string normalizedPath)
+        {
+            int separatorIndex = normalizedPath.LastIndexOf('/');
+            if (separatorIndex <= 0)
+                return string.Empty;
+
+            return normalizedPath.Substring(0, separatorIndex);
+        }
+
+        private static string GetPreviewSortLeafName(string normalizedPath)
+        {
+            int separatorIndex = normalizedPath.LastIndexOf('/');
+            if (separatorIndex < 0 || separatorIndex >= normalizedPath.Length - 1)
+                return normalizedPath;
+
+            return normalizedPath.Substring(separatorIndex + 1);
         }
 
         internal static HashSet<string> CollectSyncedDestinationSyncRelativePaths(SyncConfig config)
@@ -818,22 +925,23 @@ namespace Nyorowrl.AssetSync.Editor
             return result;
         }
 
-        private static List<EmptyDirectoryCandidate> CollectEmptyDirectoryCandidates(
+        private static List<ManagedDirectoryCandidate> CollectManagedDirectoryCandidates(
             SyncConfig config,
             string srcRoot,
             string dstRoot,
             string srcAssetRoot,
             string dstAssetRoot)
         {
-            var result = new List<EmptyDirectoryCandidate>();
+            var result = new List<ManagedDirectoryCandidate>();
             if (config == null || !config.includeSubdirectories)
                 return result;
+            bool sourceIsProjectAssetFolder = IsProjectAssetFolderPath(srcAssetRoot);
+            string normalizedSourceAssetRoot = sourceIsProjectAssetFolder
+                ? NormalizeAssetPath(srcAssetRoot)
+                : string.Empty;
 
             foreach (string sourceDirectory in Directory.GetDirectories(srcRoot, "*", SearchOption.AllDirectories))
             {
-                if (!IsDirectoryEmpty(sourceDirectory))
-                    continue;
-
                 string relPath = sourceDirectory.Substring(srcRoot.Length).TrimStart(Path.DirectorySeparatorChar, '/');
                 string normalizedRel = NormalizeRelativePath(relPath);
                 if (string.IsNullOrEmpty(normalizedRel))
@@ -842,10 +950,13 @@ namespace Nyorowrl.AssetSync.Editor
                     continue;
 
                 string destinationDirectoryPath = Path.Combine(dstRoot, NormalizedRelativePathToSystemPath(normalizedRel));
-                result.Add(new EmptyDirectoryCandidate(
+                string sourceDisplayPath = sourceIsProjectAssetFolder
+                    ? normalizedSourceAssetRoot + "/" + normalizedRel
+                    : NormalizeFullPath(sourceDirectory);
+                result.Add(new ManagedDirectoryCandidate(
                     normalizedRel,
                     destinationDirectoryPath,
-                    srcAssetRoot + "/" + normalizedRel,
+                    sourceDisplayPath,
                     dstAssetRoot + "/" + normalizedRel));
             }
 
@@ -1205,6 +1316,13 @@ namespace Nyorowrl.AssetSync.Editor
                 return true;
             }
 
+            if (IsExternalSourceDirectoryPath(config.sourcePath)
+                && HasConfiguredNonExtensionFilter(config.filters))
+            {
+                warning = "When Source is an external directory, only Extension filters are supported.";
+                return true;
+            }
+
             return false;
         }
 
@@ -1456,19 +1574,6 @@ namespace Nyorowrl.AssetSync.Editor
             return normalized.ToLowerInvariant();
         }
 
-        private static bool IsDirectoryEmpty(string directoryPath)
-        {
-            foreach (string entry in Directory.EnumerateFileSystemEntries(directoryPath))
-            {
-                if (entry.EndsWith(".meta", StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                return false;
-            }
-
-            return true;
-        }
-
         private static string ComputeMD5(string filePath)
         {
             using var md5 = MD5.Create();
@@ -1477,10 +1582,70 @@ namespace Nyorowrl.AssetSync.Editor
             return BitConverter.ToString(hash);
         }
 
-        private static string ToFullPath(string assetPath)
+        internal static bool IsProjectAssetFolderPath(string path)
         {
+            string normalizedPath = NormalizeAssetPath(path);
+            return !string.IsNullOrEmpty(normalizedPath) && AssetDatabase.IsValidFolder(normalizedPath);
+        }
+
+        internal static bool IsExternalSourceDirectoryPath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !Path.IsPathRooted(path))
+                return false;
+
+            try
+            {
+                return Directory.Exists(Path.GetFullPath(path));
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        internal static bool IsSourceFolderPathValid(string path)
+        {
+            return IsProjectAssetFolderPath(path) || IsExternalSourceDirectoryPath(path);
+        }
+
+        internal static bool TryConvertFullPathToProjectAssetPath(string fullPath, out string assetPath)
+        {
+            assetPath = string.Empty;
+            if (string.IsNullOrWhiteSpace(fullPath))
+                return false;
+
+            try
+            {
+                string normalizedFullPath = NormalizeFullPath(fullPath);
+                string projectRoot = NormalizeFullPath(Path.GetDirectoryName(Application.dataPath));
+                if (!IsSubPathOf(projectRoot, normalizedFullPath))
+                    return false;
+
+                string relativePath = normalizedFullPath.Substring(projectRoot.Length)
+                    .TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                if (string.IsNullOrEmpty(relativePath))
+                    return false;
+
+                string normalizedAssetPath = relativePath.Replace(Path.DirectorySeparatorChar, '/');
+                if (!AssetDatabase.IsValidFolder(normalizedAssetPath))
+                    return false;
+
+                assetPath = normalizedAssetPath;
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static string ToFullPath(string path)
+        {
+            if (Path.IsPathRooted(path))
+                return NormalizeFullPath(path);
+
             string projectRoot = Path.GetDirectoryName(Application.dataPath);
-            return Path.GetFullPath(Path.Combine(projectRoot, assetPath));
+            return Path.GetFullPath(Path.Combine(projectRoot, path));
         }
 
         private static bool PathsEqual(string pathA, string pathB)
@@ -1529,6 +1694,37 @@ namespace Nyorowrl.AssetSync.Editor
 
             return normalizedRelativePath.IndexOf('/') < 0
                 && normalizedRelativePath.IndexOf('\\') < 0;
+        }
+
+        private static bool HasConfiguredNonExtensionFilter(List<FilterCondition> filters)
+        {
+            if (filters == null)
+                return false;
+
+            foreach (var filter in filters)
+            {
+                if (filter == null || filter.targetKind == FilterConditionTargetKind.Extension)
+                    continue;
+
+                if (filter.targetKind == FilterConditionTargetKind.Asset)
+                {
+                    if (filter.multipleAssetGuids != null
+                        && filter.multipleAssetGuids.Any(g => !string.IsNullOrWhiteSpace(g)))
+                    {
+                        return true;
+                    }
+
+                    continue;
+                }
+
+                if (filter.multipleTypeNames != null
+                    && filter.multipleTypeNames.Any(t => !string.IsNullOrWhiteSpace(t)))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 

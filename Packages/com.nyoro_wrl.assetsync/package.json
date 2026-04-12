@@ -1,7 +1,7 @@
 {
   "name": "com.nyoro_wrl.assetsync",
   "displayName": "Asset Sync",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "unity": "6000.0",
   "license": "MIT",
   "description": "Editor-only asset synchronization tool. Mirrors files from a source folder to a destination folder and supports type, asset, and extension include/exclude filters.",

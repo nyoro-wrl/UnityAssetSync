@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.IO;
 using UnityEditor;
 using UnityEngine;
 using Nyorowrl.AssetSync;
@@ -234,7 +235,10 @@ namespace Nyorowrl.AssetSync.Editor
             if (string.IsNullOrEmpty(assetPath))
                 return;
 
-            UnityEngine.Object asset = AssetDatabase.LoadMainAssetAtPath(assetPath);
+            if (!TryGetAssetDatabasePath(assetPath, out string assetDatabasePath))
+                return;
+
+            UnityEngine.Object asset = AssetDatabase.LoadMainAssetAtPath(assetDatabasePath);
             if (asset == null)
                 return;
 
@@ -254,6 +258,54 @@ namespace Nyorowrl.AssetSync.Editor
                 stretchWidth = true
             };
             return _pathButtonStyle;
+        }
+
+        private static bool TryGetAssetDatabasePath(string path, out string assetDatabasePath)
+        {
+            assetDatabasePath = string.Empty;
+            if (string.IsNullOrWhiteSpace(path))
+                return false;
+
+            if (!Path.IsPathRooted(path))
+            {
+                assetDatabasePath = path.Replace('\\', '/');
+                return true;
+            }
+
+            try
+            {
+                string normalizedPath = NormalizeFullPath(path);
+                string projectRoot = NormalizeFullPath(Path.GetDirectoryName(Application.dataPath));
+                if (!IsSubPathOrSame(projectRoot, normalizedPath))
+                    return false;
+
+                string relativePath = normalizedPath.Substring(projectRoot.Length)
+                    .TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                if (string.IsNullOrEmpty(relativePath))
+                    return false;
+
+                assetDatabasePath = relativePath.Replace(Path.DirectorySeparatorChar, '/');
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static string NormalizeFullPath(string path)
+        {
+            return Path.GetFullPath(path)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        }
+
+        private static bool IsSubPathOrSame(string parentPath, string candidatePath)
+        {
+            if (string.Equals(parentPath, candidatePath, System.StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            string prefix = parentPath + Path.DirectorySeparatorChar;
+            return candidatePath.StartsWith(prefix, System.StringComparison.OrdinalIgnoreCase);
         }
 
         private void CommitDecisions()
