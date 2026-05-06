@@ -6,7 +6,7 @@
 
 An editor-only Unity package for one-way synchronization of files (excluding `.meta` files) from one folder to another.
 
-Useful when you want to duplicate assets and apply different import settings in each destination folder. For that workflow, using [EnforcePresetPostProcessor](https://docs.unity3d.com/Manual/DefaultPresetsByFolder.html) together is recommended.
+Useful when you want to duplicate assets and apply different import settings in each destination folder. For that workflow, using [Presets by folder](https://docs.unity3d.com/Manual/DefaultPresetsByFolder.html) together is recommended.
 
 ## Sample
 
@@ -31,6 +31,9 @@ https://github.com/nyoro-wrl/UnityAssetSync.git?path=/Packages/com.nyoro_wrl.ass
 ## Main Features
 
 - Synchronize with optional subdirectory support
+- Support project source folders or external source directories
 - Filter synchronization targets by Unity type
 - Include/exclude specific source assets (or directories)
+- Include/exclude by file extension
+- Include/exclude by regular expression
 - Exclude specific destination assets

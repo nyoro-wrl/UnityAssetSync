@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System;
 using System.IO;
+using System.Runtime.CompilerServices;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEditorInternal;
@@ -18,6 +19,7 @@ namespace Nyorowrl.AssetSync.Editor
         private const float PreviewListMaxHeight = 180f;
         private const float PreviewListMinHeight = 64f;
         private const float PreviewIconSize = 16f;
+        private const double StringFilterEditDebounceSeconds = 0.5d;
         internal static Func<string, string, string, string, bool> DisplayDialogOverride;
 
         private AssetSyncSettings _settings;
@@ -29,6 +31,17 @@ namespace Nyorowrl.AssetSync.Editor
         private bool _isResizing;
         private readonly Queue<Action> _deferredSyncActions = new Queue<Action>();
         private bool _deferredSyncScheduled;
+        private bool _isEditingFilterText;
+        private bool _stringFilterDebounceScheduled;
+        private SyncConfig _cachedPreviewConfig;
+        private bool _cachedCanPreview;
+        private string _cachedPreviewBlockedReason;
+        private IReadOnlyList<AssetSyncer.PreviewCopyEntry> _cachedPreviewEntries =
+            Array.Empty<AssetSyncer.PreviewCopyEntry>();
+        private readonly Dictionary<string, Texture> _previewIconCache =
+            new Dictionary<string, Texture>();
+        private readonly Dictionary<string, StringFilterEditState> _stringFilterEditStates =
+            new Dictionary<string, StringFilterEditState>();
 
         [SerializeField] private TreeViewState<int> _treeViewState;
         private ConfigTreeView _configTreeView;
@@ -41,6 +54,16 @@ namespace Nyorowrl.AssetSync.Editor
             new Dictionary<SyncConfig, SourceInputMode>();
 
         private int SelectedConfigIndex => _configTreeView?.SelectedIndex ?? -1;
+
+        private sealed class StringFilterEditState
+        {
+            public SyncConfig Config;
+            public List<string> Values;
+            public int Index;
+            public string Label;
+            public string Value;
+            public double LastChangedAt;
+        }
 
         [MenuItem("Window/Asset Sync")]
         public static void Open()
@@ -82,6 +105,7 @@ namespace Nyorowrl.AssetSync.Editor
 
         private void OnGUI()
         {
+            _isEditingFilterText = false;
             DrawSettingsField();
 
             if (_settings == null)
@@ -166,6 +190,7 @@ namespace Nyorowrl.AssetSync.Editor
 
         private void AddConfig()
         {
+            FlushStringFilterTextEdits();
             Undo.RecordObject(_settings, "Add Sync");
             _settings.syncConfigs.Add(new SyncConfig
             {
@@ -372,6 +397,7 @@ namespace Nyorowrl.AssetSync.Editor
                 menu.AddItem(new GUIContent("Type"), false, () => AddFilter(config, FilterConditionTargetKind.Type));
                 menu.AddItem(new GUIContent("Asset"), false, () => AddFilter(config, FilterConditionTargetKind.Asset));
                 menu.AddItem(new GUIContent("Extension"), false, () => AddFilter(config, FilterConditionTargetKind.Extension));
+                menu.AddItem(new GUIContent("Regex"), false, () => AddFilter(config, FilterConditionTargetKind.Regex));
                 menu.ShowAsContext();
             };
 
@@ -464,6 +490,8 @@ namespace Nyorowrl.AssetSync.Editor
                 DrawAssetField(contentRect.x, ref y, labelWidth, fieldWidth, lineHeight, rowSpacing, filter, config);
             else if (filter.targetKind == FilterConditionTargetKind.Extension)
                 DrawExtensionField(contentRect.x, ref y, labelWidth, fieldWidth, lineHeight, rowSpacing, filter, config);
+            else if (filter.targetKind == FilterConditionTargetKind.Regex)
+                DrawRegexField(contentRect.x, ref y, labelWidth, fieldWidth, lineHeight, rowSpacing, filter, config);
             else
                 DrawTypeField(contentRect.x, ref y, labelWidth, fieldWidth, lineHeight, rowSpacing, filter, config);
         }
@@ -483,6 +511,8 @@ namespace Nyorowrl.AssetSync.Editor
                 filter.multipleAssetGuids.Add(string.Empty);
             else if (targetKind == FilterConditionTargetKind.Extension)
                 filter.multipleExtensions.Add(string.Empty);
+            else if (targetKind == FilterConditionTargetKind.Regex)
+                filter.multipleRegexPatterns.Add(string.Empty);
             else
                 filter.multipleTypeNames.Add(string.Empty);
 
@@ -619,12 +649,53 @@ namespace Nyorowrl.AssetSync.Editor
         private void DrawExtensionField(float x, ref float y, float labelWidth, float fieldWidth, float lineHeight,
             float rowSpacing, FilterCondition filter, SyncConfig config)
         {
+            DrawStringFilterField(
+                x,
+                ref y,
+                labelWidth,
+                fieldWidth,
+                lineHeight,
+                rowSpacing,
+                filter,
+                config,
+                filter.multipleExtensions,
+                "Extension");
+        }
+
+        private void DrawRegexField(float x, ref float y, float labelWidth, float fieldWidth, float lineHeight,
+            float rowSpacing, FilterCondition filter, SyncConfig config)
+        {
+            DrawStringFilterField(
+                x,
+                ref y,
+                labelWidth,
+                fieldWidth,
+                lineHeight,
+                rowSpacing,
+                filter,
+                config,
+                filter.multipleRegexPatterns,
+                "Regex");
+        }
+
+        private void DrawStringFilterField(
+            float x,
+            ref float y,
+            float labelWidth,
+            float fieldWidth,
+            float lineHeight,
+            float rowSpacing,
+            FilterCondition filter,
+            SyncConfig config,
+            List<string> values,
+            string label)
+        {
             const float spacing = 2f;
             EnsureFilterListMode(filter);
             float fieldX = x + labelWidth;
             const float listSizeButtonWidth = 25f;
             float buttonWidth = Mathf.Round(listSizeButtonWidth);
-            for (int i = 0; i < filter.multipleExtensions.Count; i++)
+            for (int i = 0; i < values.Count; i++)
             {
                 var elementLabelRect = new Rect(x, y, labelWidth, lineHeight);
                 var elementAddRect = new Rect(
@@ -642,41 +713,197 @@ namespace Nyorowrl.AssetSync.Editor
                     y,
                     Mathf.Max(0f, fieldWidth - (buttonWidth * 2f) - (spacing * 2f)),
                     lineHeight);
-                EditorGUI.LabelField(elementLabelRect, i == 0 ? "Extension" : string.Empty);
+                EditorGUI.LabelField(elementLabelRect, i == 0 ? label : string.Empty);
 
                 int captured = i;
-                EditorGUI.BeginChangeCheck();
-                string currentValue = filter.multipleExtensions[captured] ?? string.Empty;
-                string nextValue = EditorGUI.DelayedTextField(elementFieldRect, currentValue);
-                if (EditorGUI.EndChangeCheck())
-                {
-                    Undo.RecordObject(_settings, "Change Extension");
-                    filter.multipleExtensions[captured] = nextValue;
-                    ApplyConfigChange(config);
-                }
+                DrawStringFilterTextField(elementFieldRect, filter, values, captured, label, config);
 
                 if (GUI.Button(elementAddRect, "+", EditorStyles.miniButton))
                 {
-                    Undo.RecordObject(_settings, "Add Extension");
-                    filter.multipleExtensions.Insert(captured + 1, string.Empty);
+                    FlushStringFilterTextEdits();
+                    Undo.RecordObject(_settings, "Add " + label);
+                    values.Insert(captured + 1, string.Empty);
                     ApplyConfigChange(config);
                     break;
                 }
 
-                using (new EditorGUI.DisabledScope(filter.multipleExtensions.Count <= 1))
+                using (new EditorGUI.DisabledScope(values.Count <= 1))
                 {
                     if (GUI.Button(elementRemoveRect, "-", EditorStyles.miniButton))
                     {
-                        Undo.RecordObject(_settings, "Remove Extension");
-                        filter.multipleExtensions.RemoveAt(captured);
+                        FlushStringFilterTextEdits();
+                        Undo.RecordObject(_settings, "Remove " + label);
+                        values.RemoveAt(captured);
                         ApplyConfigChange(config);
                         break;
                     }
                 }
 
-                if (i < filter.multipleExtensions.Count - 1)
+                if (i < values.Count - 1)
                     y += lineHeight + rowSpacing;
             }
+        }
+
+        private void DrawStringFilterTextField(
+            Rect rect,
+            FilterCondition filter,
+            List<string> values,
+            int index,
+            string label,
+            SyncConfig config)
+        {
+            string controlName = GetStringFilterControlName(filter, label, index);
+            string storedValue = values[index] ?? string.Empty;
+            bool hasEditState = _stringFilterEditStates.TryGetValue(controlName, out StringFilterEditState editState);
+            string editValue = hasEditState ? editState.Value : storedValue;
+
+            GUI.SetNextControlName(controlName);
+            EditorGUI.BeginChangeCheck();
+            string nextEditValue = EditorGUI.TextField(rect, editValue);
+            bool changed = EditorGUI.EndChangeCheck();
+            bool isFocused = GUI.GetNameOfFocusedControl() == controlName;
+
+            if (isFocused)
+            {
+                _isEditingFilterText = true;
+                bool shouldCommitImmediately = IsFocusedTextFieldSubmitEvent(controlName);
+                if (changed || !hasEditState)
+                {
+                    _stringFilterEditStates[controlName] = new StringFilterEditState
+                    {
+                        Config = config,
+                        Values = values,
+                        Index = index,
+                        Label = label,
+                        Value = nextEditValue,
+                        LastChangedAt = EditorApplication.timeSinceStartup
+                    };
+                    ScheduleStringFilterTextDebounce();
+                }
+
+                if (shouldCommitImmediately
+                    && _stringFilterEditStates.TryGetValue(controlName, out StringFilterEditState submittedState))
+                {
+                    CommitStringFilterTextEdit(controlName, submittedState);
+                    GUI.FocusControl(null);
+                    Event.current.Use();
+                }
+
+                return;
+            }
+
+            if (!hasEditState)
+                return;
+
+            if (changed)
+                editState.Value = nextEditValue;
+
+            CommitStringFilterTextEdit(controlName, editState);
+        }
+
+        private static bool IsFocusedTextFieldSubmitEvent(string controlName)
+        {
+            Event currentEvent = Event.current;
+            return GUI.GetNameOfFocusedControl() == controlName
+                && currentEvent != null
+                && currentEvent.type == EventType.KeyDown
+                && (currentEvent.keyCode == KeyCode.Return || currentEvent.keyCode == KeyCode.KeypadEnter);
+        }
+
+        private static string GetStringFilterControlName(FilterCondition filter, string label, int index)
+        {
+            return "AssetSync.StringFilter."
+                + RuntimeHelpers.GetHashCode(filter)
+                + "."
+                + label
+                + "."
+                + index;
+        }
+
+        private void FlushStringFilterTextEdits()
+        {
+            if (_stringFilterEditStates.Count == 0)
+                return;
+
+            var states = new List<KeyValuePair<string, StringFilterEditState>>(_stringFilterEditStates);
+            foreach (var state in states)
+            {
+                CommitStringFilterTextEdit(state.Key, state.Value);
+            }
+        }
+
+        private void ScheduleStringFilterTextDebounce()
+        {
+            if (_stringFilterDebounceScheduled)
+                return;
+
+            _stringFilterDebounceScheduled = true;
+            EditorApplication.update -= ApplyDebouncedStringFilterTextEdits;
+            EditorApplication.update += ApplyDebouncedStringFilterTextEdits;
+        }
+
+        private void ApplyDebouncedStringFilterTextEdits()
+        {
+            if (_stringFilterEditStates.Count == 0)
+            {
+                _stringFilterDebounceScheduled = false;
+                EditorApplication.update -= ApplyDebouncedStringFilterTextEdits;
+                return;
+            }
+
+            double now = EditorApplication.timeSinceStartup;
+            var dueStates = new List<KeyValuePair<string, StringFilterEditState>>();
+            foreach (var state in _stringFilterEditStates)
+            {
+                if (now - state.Value.LastChangedAt >= StringFilterEditDebounceSeconds)
+                    dueStates.Add(state);
+            }
+
+            foreach (var state in dueStates)
+            {
+                CommitStringFilterTextEdit(state.Key, state.Value);
+            }
+
+            if (_stringFilterEditStates.Count == 0)
+            {
+                _stringFilterDebounceScheduled = false;
+                EditorApplication.update -= ApplyDebouncedStringFilterTextEdits;
+            }
+        }
+
+        private void CommitStringFilterTextEdit(string controlName, StringFilterEditState editState)
+        {
+            _stringFilterEditStates.Remove(controlName);
+            if (editState?.Values == null
+                || editState.Index < 0
+                || editState.Index >= editState.Values.Count)
+            {
+                return;
+            }
+
+            string storedValue = editState.Values[editState.Index] ?? string.Empty;
+            string editValue = editState.Value ?? string.Empty;
+            if (storedValue == editValue)
+                return;
+
+            if (_settings != null)
+                Undo.RecordObject(_settings, "Change " + editState.Label);
+            editState.Values[editState.Index] = editValue;
+            InvalidatePreviewCache(editState.Config);
+            ApplyConfigChange(editState.Config);
+            Repaint();
+        }
+
+        private void InvalidatePreviewCache(SyncConfig config = null)
+        {
+            if (config != null && _cachedPreviewConfig != config)
+                return;
+
+            _cachedPreviewConfig = null;
+            _cachedCanPreview = false;
+            _cachedPreviewBlockedReason = null;
+            _cachedPreviewEntries = Array.Empty<AssetSyncer.PreviewCopyEntry>();
+            _previewIconCache.Clear();
         }
 
         private void DrawAssetFieldControl(
@@ -733,6 +960,14 @@ namespace Nyorowrl.AssetSync.Editor
                     changed = true;
                 }
             }
+            else if (filter.targetKind == FilterConditionTargetKind.Regex)
+            {
+                if (filter.multipleRegexPatterns.Count == 0)
+                {
+                    filter.multipleRegexPatterns.Add(string.Empty);
+                    changed = true;
+                }
+            }
             else
             {
                 if (filter.multipleTypeNames.Count == 0)
@@ -755,6 +990,8 @@ namespace Nyorowrl.AssetSync.Editor
                 count = filter.multipleAssetGuids.Count;
             else if (filter.targetKind == FilterConditionTargetKind.Extension)
                 count = filter.multipleExtensions.Count;
+            else if (filter.targetKind == FilterConditionTargetKind.Regex)
+                count = filter.multipleRegexPatterns.Count;
             else
                 count = filter.multipleTypeNames.Count;
 
@@ -766,6 +1003,7 @@ namespace Nyorowrl.AssetSync.Editor
             filter.multipleTypeNames ??= new List<string>();
             filter.multipleAssetGuids ??= new List<string>();
             filter.multipleExtensions ??= new List<string>();
+            filter.multipleRegexPatterns ??= new List<string>();
         }
 
         private void DrawIgnoreList(SyncConfig config)
@@ -850,13 +1088,23 @@ namespace Nyorowrl.AssetSync.Editor
 
         private void DrawCopyPreview(SyncConfig config)
         {
-            bool canPreview = CanPreviewCopyTargets(config, out string blockedReason);
-            bool includeUnchangedForPreview = (config != null && config.enabled)
-                || _deferredSyncScheduled
-                || _deferredSyncActions.Count > 0;
-            IReadOnlyList<AssetSyncer.PreviewCopyEntry> previewEntries = canPreview
-                ? AssetSyncer.CollectCopyPreviewEntries(config, includeUnchanged: includeUnchangedForPreview)
-                : Array.Empty<AssetSyncer.PreviewCopyEntry>();
+            bool canPreview = _cachedCanPreview;
+            string blockedReason = _cachedPreviewBlockedReason;
+            IReadOnlyList<AssetSyncer.PreviewCopyEntry> previewEntries = _cachedPreviewEntries;
+            if (!_isEditingFilterText || _cachedPreviewConfig != config)
+            {
+                canPreview = CanPreviewCopyTargets(config, out blockedReason);
+                bool includeUnchangedForPreview = (config != null && config.enabled)
+                    || _deferredSyncScheduled
+                    || _deferredSyncActions.Count > 0;
+                previewEntries = canPreview
+                    ? AssetSyncer.CollectCopyPreviewEntries(config, includeUnchanged: includeUnchangedForPreview)
+                    : Array.Empty<AssetSyncer.PreviewCopyEntry>();
+                _cachedPreviewConfig = config;
+                _cachedCanPreview = canPreview;
+                _cachedPreviewBlockedReason = blockedReason;
+                _cachedPreviewEntries = previewEntries;
+            }
 
             _isPreviewExpanded = EditorGUILayout.Foldout(_isPreviewExpanded, $"Preview ({previewEntries.Count})", true);
             if (!_isPreviewExpanded)
@@ -874,17 +1122,20 @@ namespace Nyorowrl.AssetSync.Editor
                 return;
             }
 
-            bool selectedEntryExists = false;
-            foreach (var previewEntry in previewEntries)
+            if (!_isEditingFilterText)
             {
-                if (GetPreviewEntryKey(previewEntry) == _selectedPreviewEntryKey)
+                bool selectedEntryExists = false;
+                foreach (var previewEntry in previewEntries)
                 {
-                    selectedEntryExists = true;
-                    break;
+                    if (GetPreviewEntryKey(previewEntry) == _selectedPreviewEntryKey)
+                    {
+                        selectedEntryExists = true;
+                        break;
+                    }
                 }
+                if (!selectedEntryExists)
+                    _selectedPreviewEntryKey = null;
             }
-            if (!selectedEntryExists)
-                _selectedPreviewEntryKey = null;
 
             float rowHeight = EditorGUIUtility.singleLineHeight + EditorGUIUtility.standardVerticalSpacing;
             float desiredHeight = (previewEntries.Count * rowHeight) + 8f;
@@ -895,10 +1146,22 @@ namespace Nyorowrl.AssetSync.Editor
                 using (var scroll = new EditorGUILayout.ScrollViewScope(_previewScrollPosition, GUILayout.Height(listHeight)))
                 {
                     _previewScrollPosition = scroll.scrollPosition;
-                    foreach (var previewEntry in previewEntries)
+                    Rect contentRect = GUILayoutUtility.GetRect(
+                        1f,
+                        desiredHeight,
+                        GUILayout.ExpandWidth(true));
+                    int firstVisibleIndex = Mathf.Max(0, Mathf.FloorToInt(_previewScrollPosition.y / rowHeight));
+                    int visibleCount = Mathf.CeilToInt(listHeight / rowHeight) + 2;
+                    int lastVisibleIndex = Mathf.Min(previewEntries.Count - 1, firstVisibleIndex + visibleCount);
+                    for (int i = firstVisibleIndex; i <= lastVisibleIndex; i++)
                     {
+                        var previewEntry = previewEntries[i];
                         float entryHeight = Mathf.Max(PreviewIconSize, EditorGUIUtility.singleLineHeight);
-                        Rect rowRect = EditorGUILayout.GetControlRect(false, entryHeight);
+                        var rowRect = new Rect(
+                            contentRect.x,
+                            contentRect.y + (i * rowHeight),
+                            contentRect.width,
+                            entryHeight);
                         string entryKey = GetPreviewEntryKey(previewEntry);
                         bool isSelected = entryKey == _selectedPreviewEntryKey;
                         if (isSelected)
@@ -911,7 +1174,7 @@ namespace Nyorowrl.AssetSync.Editor
                         }
                         EditorGUIUtility.AddCursorRect(rowRect, MouseCursor.Link);
 
-                        Texture icon = GetPreviewIcon(previewEntry.SourceAssetPath, previewEntry.DestinationAssetPath);
+                        Texture icon = GetPreviewIconCached(previewEntry.SourceAssetPath, previewEntry.DestinationAssetPath);
 
                         float iconY = rowRect.y + ((rowRect.height - PreviewIconSize) * 0.5f);
                         var iconRect = new Rect(rowRect.x, iconY, PreviewIconSize, PreviewIconSize);
@@ -926,6 +1189,17 @@ namespace Nyorowrl.AssetSync.Editor
                     }
                 }
             }
+        }
+
+        private Texture GetPreviewIconCached(string sourceAssetPath, string destinationAssetPath)
+        {
+            string cacheKey = sourceAssetPath + "\n" + destinationAssetPath;
+            if (_previewIconCache.TryGetValue(cacheKey, out Texture cachedIcon))
+                return cachedIcon;
+
+            Texture icon = GetPreviewIcon(sourceAssetPath, destinationAssetPath);
+            _previewIconCache[cacheKey] = icon;
+            return icon;
         }
 
         private static Texture GetPreviewIcon(string sourceAssetPath, string destinationAssetPath)
@@ -1210,6 +1484,7 @@ namespace Nyorowrl.AssetSync.Editor
         {
             if (_settings == null || idx < 0 || idx >= _settings.syncConfigs.Count) return;
 
+            FlushStringFilterTextEdits();
             var config = _settings.syncConfigs[idx];
             HashSet<string> filesToDelete = AssetSyncer.CollectExistingSyncedDestinationFilesForDeletedConfig(config);
             if (filesToDelete.Count > 0)
@@ -1281,6 +1556,7 @@ namespace Nyorowrl.AssetSync.Editor
 
         private void SaveSelectedConfigIndex(int selectedIndex)
         {
+            FlushStringFilterTextEdits();
             string selectionKey = GetSelectedConfigIndexPrefKey();
             if (string.IsNullOrEmpty(selectionKey))
                 return;
@@ -1412,6 +1688,7 @@ namespace Nyorowrl.AssetSync.Editor
 
         private void ApplyConfigChange(SyncConfig config)
         {
+            InvalidatePreviewCache(config);
             EditorUtility.SetDirty(_settings);
             if (!config.enabled)
             {
@@ -1433,6 +1710,7 @@ namespace Nyorowrl.AssetSync.Editor
 
         private void ApplyEnableStateChange(SyncConfig config)
         {
+            InvalidatePreviewCache(config);
             EditorUtility.SetDirty(_settings);
             if (string.IsNullOrEmpty(config.sourcePath) || string.IsNullOrEmpty(config.destinationPath))
                 return;
@@ -1666,9 +1944,12 @@ namespace Nyorowrl.AssetSync.Editor
 
         private void OnDisable()
         {
+            FlushStringFilterTextEdits();
+            EditorApplication.update -= ApplyDebouncedStringFilterTextEdits;
             EditorApplication.delayCall -= FlushDeferredSyncActions;
             _deferredSyncActions.Clear();
             _deferredSyncScheduled = false;
+            _stringFilterDebounceScheduled = false;
             _sourceInputModes.Clear();
         }
     }

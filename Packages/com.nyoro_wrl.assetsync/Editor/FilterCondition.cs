@@ -6,7 +6,8 @@ namespace Nyorowrl.AssetSync
     {
         Type = 0,
         Asset = 1,
-        Extension = 2
+        Extension = 2,
+        Regex = 3
     }
 
     [System.Serializable]
@@ -17,5 +18,6 @@ namespace Nyorowrl.AssetSync
         public List<string> multipleTypeNames = new List<string>();
         public List<string> multipleAssetGuids = new List<string>();
         public List<string> multipleExtensions = new List<string>();
+        public List<string> multipleRegexPatterns = new List<string>();
     }
 }

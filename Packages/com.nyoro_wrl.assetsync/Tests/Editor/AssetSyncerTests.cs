@@ -563,7 +563,38 @@ namespace Nyorowrl.AssetSync.Editor.Tests
                 }, out string warning);
 
                 Assert.IsTrue(hasWarning);
-                StringAssert.Contains("only Extension filters are supported", warning);
+                StringAssert.Contains("only Extension and Regex filters are supported", warning);
+            }
+            finally
+            {
+                if (Directory.Exists(externalRoot))
+                    Directory.Delete(externalRoot, true);
+            }
+        }
+
+        [Test]
+        public void TryGetConfigWarning_ExternalSourceDirectory_WithRegexFilter_ReturnsFalse()
+        {
+            string externalRoot = Path.Combine(Path.GetTempPath(), "AssetSyncExternal_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(externalRoot);
+            try
+            {
+                bool hasWarning = AssetSyncer.TryGetConfigWarning(new SyncConfig
+                {
+                    sourcePath = externalRoot,
+                    destinationPath = _dstAssetPath,
+                    enabled = true,
+                    filters = new List<FilterCondition>
+                    {
+                        new FilterCondition
+                        {
+                            targetKind = FilterConditionTargetKind.Regex,
+                            multipleRegexPatterns = new List<string> { @"\.txt$" }
+                        }
+                    }
+                }, out _);
+
+                Assert.IsFalse(hasWarning);
             }
             finally
             {
@@ -1431,6 +1462,45 @@ namespace Nyorowrl.AssetSync.Editor.Tests
 
             Assert.IsFalse(DstExists("a.txt"));
             Assert.IsTrue(DstExists("b.bytes"));
+        }
+
+        [Test]
+        public void Integration_FilterIncludeRegex_OnlyMatchingPathCopied()
+        {
+            WriteSrc("keep.txt", "A");
+            WriteSrc("skip.txt", "B");
+            AssetDatabase.Refresh();
+
+            var includeByRegex = new FilterCondition
+            {
+                targetKind = FilterConditionTargetKind.Regex,
+                multipleRegexPatterns = new List<string> { @"/keep\.txt$" }
+            };
+
+            AssetSyncer.SyncConfig(MakeConfig(new List<FilterCondition> { includeByRegex }));
+
+            Assert.IsTrue(DstExists("keep.txt"));
+            Assert.IsFalse(DstExists("skip.txt"));
+        }
+
+        [Test]
+        public void Integration_FilterExcludeRegex_MatchingPathExcluded()
+        {
+            WriteSrc("keep.txt", "A");
+            WriteSrc("skip.txt", "B");
+            AssetDatabase.Refresh();
+
+            var excludeByRegex = new FilterCondition
+            {
+                targetKind = FilterConditionTargetKind.Regex,
+                invert = true,
+                multipleRegexPatterns = new List<string> { @"/skip\.txt$" }
+            };
+
+            AssetSyncer.SyncConfig(MakeConfig(new List<FilterCondition> { excludeByRegex }));
+
+            Assert.IsTrue(DstExists("keep.txt"));
+            Assert.IsFalse(DstExists("skip.txt"));
         }
 
         [Test]
