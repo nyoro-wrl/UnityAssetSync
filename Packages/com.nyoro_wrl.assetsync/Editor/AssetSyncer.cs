@@ -1786,6 +1786,8 @@ namespace Nyorowrl.AssetSync.Editor
                 if (settingsChanged)
                     EditorUtility.SetDirty(settings);
             }
+
+            ExternalSourceWatcher.RebuildWatchers();
         }
 
         internal static bool IsAssetPathWithinRoot(string assetPath, string rootPath)
