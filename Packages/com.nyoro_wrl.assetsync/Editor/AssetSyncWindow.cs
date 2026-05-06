@@ -1650,7 +1650,8 @@ namespace Nyorowrl.AssetSync.Editor
 
         private static bool IsFolderSelectionValid(string assetPath)
         {
-            return AssetSyncer.IsSourceFolderPathValid(assetPath);
+            return AssetSyncer.IsSourceFolderPathValid(assetPath)
+                || AssetSyncer.IsUnavailableExternalSourceDirectoryPath(assetPath);
         }
 
         private static bool IsDestinationFolderSelectionValid(string assetPath)

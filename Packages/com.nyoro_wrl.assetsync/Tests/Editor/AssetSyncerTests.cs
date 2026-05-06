@@ -509,6 +509,56 @@ namespace Nyorowrl.AssetSync.Editor.Tests
         }
 
         [Test]
+        public void SyncConfig_UnavailableExternalSource_DoesNotDeleteSyncedDestination()
+        {
+            string externalRoot = Path.Combine(Path.GetTempPath(), "AssetSyncExternal_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(externalRoot);
+            try
+            {
+                File.WriteAllText(Path.Combine(externalRoot, "external.txt"), "external");
+
+                var config = MakeConfig();
+                config.sourcePath = externalRoot;
+
+                AssetSyncer.SyncConfig(config);
+                Assert.IsTrue(DstExists("external.txt"));
+                Assert.IsTrue(SyncContains(config, "external.txt"));
+            }
+            finally
+            {
+                if (Directory.Exists(externalRoot))
+                    Directory.Delete(externalRoot, true);
+            }
+
+            var disabledConfig = MakeConfig();
+            disabledConfig.sourcePath = externalRoot;
+            disabledConfig.enabled = false;
+            disabledConfig.syncRelativePaths.Add("external.txt");
+
+            int copied = AssetSyncer.SyncConfig(disabledConfig);
+
+            Assert.AreEqual(0, copied);
+            Assert.IsTrue(DstExists("external.txt"), "cloned destination file should remain when external source is unavailable");
+            Assert.IsTrue(SyncContains(disabledConfig, "external.txt"), "sync ownership should remain for a machine that has the external source");
+        }
+
+        [Test]
+        public void TryGetConfigWarning_UnavailableExternalSource_ReturnsMachineLocalWarning()
+        {
+            string externalRoot = Path.Combine(Path.GetTempPath(), "AssetSyncExternalMissing_" + Guid.NewGuid().ToString("N"));
+
+            bool hasWarning = AssetSyncer.TryGetConfigWarning(new SyncConfig
+            {
+                sourcePath = externalRoot,
+                destinationPath = _dstAssetPath,
+                enabled = true
+            }, out string warning);
+
+            Assert.IsTrue(hasWarning);
+            StringAssert.Contains("not available on this machine", warning);
+        }
+
+        [Test]
         public void SyncConfig_ExternalSourceDirectory_ExtensionFilter_Works()
         {
             string externalRoot = Path.Combine(Path.GetTempPath(), "AssetSyncExternal_" + Guid.NewGuid().ToString("N"));

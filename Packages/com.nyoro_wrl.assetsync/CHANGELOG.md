@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-05-06
+
+### Changed
+
+- Preserved cloned destination files when an external `Source` directory is not available on the current machine.
+
 ## [1.6.0] - 2026-05-06
 
 ### Added

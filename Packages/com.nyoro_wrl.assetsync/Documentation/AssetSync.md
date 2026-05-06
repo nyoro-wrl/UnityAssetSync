@@ -53,6 +53,7 @@ Install this package with the Unity Package Manager.
 - When `Source` is an external directory, only `Extension` and `Regex` filters are supported (`Type` and `Asset` filters are rejected with a warning).
 - If a destination file already exists and is neither sync nor ignored, AssetSync opens a conflict dialog to choose `Overwrite` or `Keep`.
 - Disabling a config removes destination files tracked as sync, while preserving manual files and ignored destination entries.
+- If an external `Source` path is not available on the current machine, AssetSync skips synchronization and preserves existing destination files. This supports cloned projects where synced destination files are already present in Git but the original external directory exists only on another PC.
 - Synced destination assets are shown with an icon badge in the Project window (excluded for ignored entries or disabled configs).
 - `Source` and `Destination` become read-only while the config is enabled after activation.
 - If selected source or destination folders are moved, stored config paths are remapped automatically.

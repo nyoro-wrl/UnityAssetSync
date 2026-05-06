@@ -367,11 +367,13 @@ namespace Nyorowrl.AssetSync.Editor.Tests
             Assert.IsNotNull(folderValidMethod, "IsFolderSelectionValid method not found");
 
             string externalRoot = Path.Combine(Path.GetTempPath(), "AssetSyncWindowExternal_" + Guid.NewGuid().ToString("N"));
+            string missingExternalRoot = Path.Combine(Path.GetTempPath(), "AssetSyncWindowExternalMissing_" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(externalRoot);
             try
             {
                 Assert.IsTrue((bool)folderValidMethod.Invoke(null, new object[] { _srcAssetPath }), "existing folder path should be valid");
                 Assert.IsTrue((bool)folderValidMethod.Invoke(null, new object[] { externalRoot }), "existing external directory should be valid");
+                Assert.IsTrue((bool)folderValidMethod.Invoke(null, new object[] { missingExternalRoot }), "missing external directory should keep the cloned config valid for display");
                 Assert.IsFalse((bool)folderValidMethod.Invoke(null, new object[] { "" }), "empty path should be invalid");
                 Assert.IsFalse((bool)folderValidMethod.Invoke(null, new object[] { _testRoot + "/NoSuchFolder" }), "missing folder path should be invalid");
             }
@@ -408,6 +410,24 @@ namespace Nyorowrl.AssetSync.Editor.Tests
                 if (Directory.Exists(externalRoot))
                     Directory.Delete(externalRoot, true);
             }
+        }
+
+        [Test]
+        public void CanActivateWithSyncButton_UnavailableExternalSource_ReturnsFalse()
+        {
+            MethodInfo canActivateMethod = typeof(AssetSyncWindow).GetMethod("CanActivateWithSyncButton", BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.IsNotNull(canActivateMethod, "CanActivateWithSyncButton method not found");
+
+            var config = new SyncConfig
+            {
+                isSyncActivated = false,
+                enabled = false,
+                sourcePath = Path.Combine(Path.GetTempPath(), "AssetSyncWindowExternalMissing_" + Guid.NewGuid().ToString("N")),
+                destinationPath = _dstAssetPath
+            };
+
+            bool canActivate = (bool)canActivateMethod.Invoke(null, new object[] { config });
+            Assert.IsFalse(canActivate);
         }
 
         [Test]

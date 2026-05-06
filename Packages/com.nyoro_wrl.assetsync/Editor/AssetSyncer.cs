@@ -140,6 +140,9 @@ namespace Nyorowrl.AssetSync.Editor
 
             if (!config.enabled)
             {
+                if (IsUnavailableExternalSourceDirectoryPath(config.sourcePath))
+                    return 0;
+
                 RemoveSyncFilesFromDestination(config, out bool disabledStateChanged, out bool disabledFileSystemChanged);
                 stateChanged |= disabledStateChanged;
                 if (disabledFileSystemChanged)
@@ -288,7 +291,8 @@ namespace Nyorowrl.AssetSync.Editor
 
             if (TryGetConfigWarning(config, out string warning))
             {
-                Debug.LogWarning($"[AssetSync] '{config.configName}': {warning}");
+                if (!IsUnavailableExternalSourceDirectoryPath(config.sourcePath))
+                    Debug.LogWarning($"[AssetSync] '{config.configName}': {warning}");
                 return false;
             }
 
@@ -1315,6 +1319,12 @@ namespace Nyorowrl.AssetSync.Editor
 
             if (!Directory.Exists(srcRoot))
             {
+                if (IsUnavailableExternalSourceDirectoryPath(config.sourcePath))
+                {
+                    warning = $"External source directory is not available on this machine: {srcRoot}";
+                    return true;
+                }
+
                 warning = $"Source directory does not exist: {srcRoot}";
                 return true;
             }
@@ -1647,6 +1657,21 @@ namespace Nyorowrl.AssetSync.Editor
             try
             {
                 return Directory.Exists(Path.GetFullPath(path));
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        internal static bool IsUnavailableExternalSourceDirectoryPath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !Path.IsPathRooted(path))
+                return false;
+
+            try
+            {
+                return !Directory.Exists(Path.GetFullPath(path));
             }
             catch
             {
