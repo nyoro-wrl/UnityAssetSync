@@ -1660,6 +1660,8 @@ namespace Nyorowrl.AssetSync.Editor
                 var action = _deferredSyncActions.Dequeue();
                 action?.Invoke();
             }
+
+            ExternalSourceWatcher.RebuildWatchers();
         }
 
         private void OnDisable()

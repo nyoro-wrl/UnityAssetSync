@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-05-06
+
+### Added
+
+- Added automatic sync when external source folder changes are detected using `FileSystemWatcher`.
+- Changes are debounced (0.5 seconds) before sync is triggered to avoid redundant syncs on rapid file writes.
+
 ## [1.5.0] - 2026-04-13
 
 ### Added
