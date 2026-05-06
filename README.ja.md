@@ -4,9 +4,9 @@
 
 [English](README.md) | [日本語](README.ja.md)
 
-フォルダから別のフォルダに、`.meta`ファイル以外のファイルを単方向で同期するEditor専用パッケージです。
+フォルダから別のフォルダへ、`.meta` ファイル以外のファイルを一方向で同期する Editor 専用 Unity パッケージです。
 
-アセットをコピーして、それぞれに別のインポート設定を割り当てる際などに活用できます。その際は [EnforcePresetPostProcessor](https://docs.unity3d.com/Manual/DefaultPresetsByFolder.html) と併用するのがおすすめです。
+アセットを複製し、複製先ごとに異なるインポート設定を適用したい場合に便利です。その用途では [Presets by folder](https://docs.unity3d.com/Manual/DefaultPresetsByFolder.html) との併用をおすすめします。
 
 ## サンプル
 
@@ -14,7 +14,7 @@
 
 ## インストール
 
-Package Manager の `Add package from git URL...` に、次の URL をそのまま入力してください。
+Package Manager の `Add package from git URL...` に、次の URL を入力してください。
 
 ```text
 https://github.com/nyoro-wrl/UnityAssetSync.git?path=/Packages/com.nyoro_wrl.assetsync
@@ -22,15 +22,18 @@ https://github.com/nyoro-wrl/UnityAssetSync.git?path=/Packages/com.nyoro_wrl.ass
 
 ## 使い方
 
-1. `ウィンドウ > Asset Sync` を開きます。
-2. `New` ボタンで `AssetSyncSettings` アセットを作成します。
-3. `Add Sync` でSyncを追加して、`Source(同期元)` と `Destination(同期先)` のフォルダを指定します。
-4. `Sync` ボタンで同期が開始します。
-5. それ以降は `Enable` で有効/無効を切り替えます。
+1. `Window > Asset Sync` を開きます。
+2. `New` で `AssetSyncSettings` アセットを作成します。
+3. `Add Sync` で同期設定を追加し、`Source` と `Destination` フォルダを指定します。
+4. `Sync` ボタンで同期を実行します。
+5. 以降は `Enable` で有効/無効を切り替えます。
 
 ## 主な機能
 
-- サブディレクトリを含めて同期する
-- Unity の型を使って同期対象を絞る
-- 同期元の特定のアセット（またはディレクトリ）を追加/除外する
-- 同期先の特定のアセットを除外する
+- サブディレクトリを含めた同期
+- プロジェクト内フォルダまたは外部ディレクトリを同期元に指定
+- Unity の型による同期対象のフィルタリング
+- 同期元の特定アセットまたはディレクトリの追加/除外
+- 拡張子による追加/除外
+- 正規表現による追加/除外
+- 同期先の特定アセットの除外

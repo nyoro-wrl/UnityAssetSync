@@ -220,6 +220,55 @@ namespace Nyorowrl.AssetSync.Editor.Tests
         }
 
         [Test]
+        public void RegexList_SingleEntry_Matching_ReturnsTrue()
+        {
+            var f = new FilterCondition
+            {
+                targetKind = FilterConditionTargetKind.Regex,
+                multipleRegexPatterns = new List<string> { @"Sub/.+\.txt$" }
+            };
+
+            Assert.IsTrue(AssetSyncer.EvaluateCondition(f, _nestedAssetPath));
+        }
+
+        [Test]
+        public void RegexList_SingleEntry_NonMatching_ReturnsFalse()
+        {
+            var f = new FilterCondition
+            {
+                targetKind = FilterConditionTargetKind.Regex,
+                multipleRegexPatterns = new List<string> { @"\.png$" }
+            };
+
+            Assert.IsFalse(AssetSyncer.EvaluateCondition(f, _jsonAssetPath));
+        }
+
+        [Test]
+        public void RegexList_SingleEntry_InvertNonMatching_ReturnsTrue()
+        {
+            var f = new FilterCondition
+            {
+                targetKind = FilterConditionTargetKind.Regex,
+                invert = true,
+                multipleRegexPatterns = new List<string> { @"\.png$" }
+            };
+
+            Assert.IsTrue(AssetSyncer.EvaluateCondition(f, _jsonAssetPath));
+        }
+
+        [Test]
+        public void RegexList_InvalidEntry_NoOp_ReturnsTrue()
+        {
+            var f = new FilterCondition
+            {
+                targetKind = FilterConditionTargetKind.Regex,
+                multipleRegexPatterns = new List<string> { "[" }
+            };
+
+            Assert.IsTrue(AssetSyncer.EvaluateCondition(f, _jsonAssetPath));
+        }
+
+        [Test]
         public void EmptyTypeEntry_ReturnsTrue()
         {
             var f = new FilterCondition { multipleTypeNames = new List<string> { string.Empty } };

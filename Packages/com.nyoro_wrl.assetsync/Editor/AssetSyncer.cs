@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
+using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEngine;
 using Nyorowrl.AssetSync;
@@ -47,6 +48,8 @@ namespace Nyorowrl.AssetSync.Editor
                 IsDirectory = isDirectory;
             }
         }
+
+        private static readonly TimeSpan RegexMatchTimeout = TimeSpan.FromMilliseconds(250);
 
         internal delegate bool ConflictResolverDelegate(
             SyncConfig config,
@@ -1317,9 +1320,9 @@ namespace Nyorowrl.AssetSync.Editor
             }
 
             if (IsExternalSourceDirectoryPath(config.sourcePath)
-                && HasConfiguredNonExtensionFilter(config.filters))
+                && HasConfiguredProjectAssetOnlyFilter(config.filters))
             {
-                warning = "When Source is an external directory, only Extension filters are supported.";
+                warning = "When Source is an external directory, only Extension and Regex filters are supported.";
                 return true;
             }
 
@@ -1395,6 +1398,9 @@ namespace Nyorowrl.AssetSync.Editor
                     break;
                 case FilterConditionTargetKind.Extension:
                     matched = EvaluateExtensionCondition(condition, assetPath, out noOp);
+                    break;
+                case FilterConditionTargetKind.Regex:
+                    matched = EvaluateRegexCondition(condition, assetPath, out noOp);
                     break;
                 default:
                     matched = EvaluateTypeCondition(condition, assetPath, out noOp);
@@ -1503,6 +1509,51 @@ namespace Nyorowrl.AssetSync.Editor
 
             noOp = !hasExtensionFilter;
             return !hasExtensionFilter;
+        }
+
+        private static bool EvaluateRegexCondition(
+            FilterCondition condition,
+            string assetPath,
+            out bool noOp)
+        {
+            if (condition.multipleRegexPatterns == null || condition.multipleRegexPatterns.Count == 0)
+            {
+                noOp = true;
+                return true;
+            }
+
+            string normalizedAssetPath = NormalizeAssetPath(assetPath);
+            bool hasValidRegexFilter = false;
+
+            foreach (string pattern in condition.multipleRegexPatterns)
+            {
+                if (string.IsNullOrWhiteSpace(pattern))
+                    continue;
+
+                try
+                {
+                    bool matched = Regex.IsMatch(
+                        normalizedAssetPath,
+                        pattern,
+                        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
+                        RegexMatchTimeout);
+                    hasValidRegexFilter = true;
+                    if (matched)
+                    {
+                        noOp = false;
+                        return true;
+                    }
+                }
+                catch (ArgumentException)
+                {
+                }
+                catch (RegexMatchTimeoutException)
+                {
+                }
+            }
+
+            noOp = !hasValidRegexFilter;
+            return !hasValidRegexFilter;
         }
 
         private static bool TryResolveAssetFilterTarget(
@@ -1696,15 +1747,19 @@ namespace Nyorowrl.AssetSync.Editor
                 && normalizedRelativePath.IndexOf('\\') < 0;
         }
 
-        private static bool HasConfiguredNonExtensionFilter(List<FilterCondition> filters)
+        private static bool HasConfiguredProjectAssetOnlyFilter(List<FilterCondition> filters)
         {
             if (filters == null)
                 return false;
 
             foreach (var filter in filters)
             {
-                if (filter == null || filter.targetKind == FilterConditionTargetKind.Extension)
+                if (filter == null
+                    || filter.targetKind == FilterConditionTargetKind.Extension
+                    || filter.targetKind == FilterConditionTargetKind.Regex)
+                {
                     continue;
+                }
 
                 if (filter.targetKind == FilterConditionTargetKind.Asset)
                 {

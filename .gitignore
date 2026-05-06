@@ -34,6 +34,12 @@
 # Visual Studio cache directory
 .vs/
 
+# Local assistant/editor tooling
+.claude/
+.codex/
+.cursor/
+.uloop/
+
 # Gradle cache directory
 .gradle/
 
@@ -94,3 +100,11 @@ InitTestScene*.unity*
 /[Aa]ssets/Unity.VisualScripting.Generated/VisualScripting.Flow/UnitOptions.db.meta
 /[Aa]ssets/Unity.VisualScripting.Generated/VisualScripting.Core/Property Providers
 /[Aa]ssets/Unity.VisualScripting.Generated/VisualScripting.Core/Property Providers.meta
+
+# Local AssetSync test/development assets
+/[Aa]ssets/AssetSyncSettings.asset
+/[Aa]ssets/AssetSyncSettings.asset.meta
+/[Aa]ssets/Example/
+/[Aa]ssets/Example.meta
+/[Aa]ssets/vTabs/
+/[Aa]ssets/vTabs.meta

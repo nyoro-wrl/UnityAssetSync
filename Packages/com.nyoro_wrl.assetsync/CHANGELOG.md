@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-05-06
+
+### Added
+
+- Added `Regex` filter target in the `Filters` UI.
+- Added regex-based include/exclude evaluation against normalized source paths.
+
+### Changed
+
+- Skipped preview recalculation while editing `Extension` and `Regex` filter text fields to prioritize typing performance.
+- Virtualized preview list rendering and cached preview icons to avoid per-keystroke full-list rendering work.
+- Applied `Extension` and `Regex` text filter edits automatically after a short typing pause, with Enter applying immediately.
+
 ## [1.5.1] - 2026-05-06
 
 ### Added
