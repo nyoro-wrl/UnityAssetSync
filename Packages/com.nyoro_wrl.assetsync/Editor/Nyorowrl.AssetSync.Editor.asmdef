@@ -4,5 +4,6 @@
     "includePlatforms": [
         "Editor"
     ],
-    "excludePlatforms": []
+    "excludePlatforms": [],
+    "autoReferenced": true
 }

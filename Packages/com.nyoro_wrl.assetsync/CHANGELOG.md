@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [1.7.2] - 2026-05-12
+
+### Changed
+
+- Set `autoReferenced: true` on the editor assembly so `AssetSyncAPI` is available without manually adding an assembly reference.
+
 ## [1.7.1] - 2026-05-12
 
 ### Fixed
